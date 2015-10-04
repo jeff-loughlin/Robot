@@ -224,116 +224,27 @@ void ProcessSerialMsg(const char *msg)
 
     ParseMessage(msg, msgType, val);
 
-//    if (!strcmp(msgType, "LA"))
-//	{
-//		latitude = strtod(val, 0);
-//		latitude_t = millis();
-//	}
-//    else if (!strcmp(msgType, "LO"))
-//	{
-//		longitude = strtod(val, 0);
-//		longitude_t = millis();
-//	}
-        if (!strcmp(msgType, "DIS1"))
-	{
-		distance1 = strtol(val, 0, 10);
-		distance1_t = millis();
-	}
-        if (!strcmp(msgType, "DIS2"))
-	{
-		distance2 = strtol(val, 0, 10);
-		distance2_t = millis();
-	}
-#ifdef JUNK
-	else if (!strcmp(msgType, "MX"))
-	{
-	    magX = strtol(val, 0, 10);
-	    magX_t = millis();
-	}
-	else if (!strcmp(msgType, "MY"))
-	{
-	    magY = strtol(val, 0, 10);
-	    magY_t = millis();
-	}
-	else if (!strcmp(msgType, "MZ"))
-	{
-	    magZ = strtol(val, 0, 10);
-	    magZ_t = millis();
-	}
-	else if (!strcmp(msgType, "AX"))
-	{
-	    accelX = (float)(strtol(val, 0, 10));
-	    accelX_t = millis();
-
-        // Invert the X axis because it is mounted upside-down
-//        accelX = -accelX;
-
-        // Apply the calibration offset to correct for constant offset
-        accelX -= accelXCal;
-	}
-	else if (!strcmp(msgType, "AY"))
-	{
-	    accelY = (float)(strtol(val, 0, 10));
-	    accelY_t = millis();
-
-        // Invert the Y axis becasue it is mounted upside-down
-//        accelY = -accelY;
-
-        // Apply the calibration offset to correct for constant offset
-        accelY -= accelYCal;
-	}
-	else if (!strcmp(msgType, "AZ"))
-	{
-	    accelZ = (float)(strtol(val, 0, 10));
-	    accelZ_t = millis();
-
-        // Invert the Z axis because it is mounted upside-down
-//        accelZ = -accelZ;
-
-        // Apply the calibration offset to correct for constant offset.  (NOTE: Level setting for ZAxis is 980)
-        accelZ -= (accelZCal - 980);
-	}
-	else if (!strcmp(msgType, "GX"))
-	{
-	    gyroX = strtol(val, 0, 10);
-	    gyroX_t = millis();
-
-        gyroX -= gyroXCal;
-	}
-	else if (!strcmp(msgType, "GY"))
-	{
-	    gyroY = strtol(val, 0, 10);
-	    gyroY_t = millis();
-
-        gyroY -= gyroYCal;
-	}
-	else if (!strcmp(msgType, "GZ"))
-	{
-	    gyroZ = strtol(val, 0, 10);
-	    gyroZ_t = millis();
-
-        gyroZ -= gyroZCal;
-	}
-#endif
-	else if (!strcmp(msgType, "GDT"))
-	{
-	    gyroDeltaT = strtol(val, 0, 10);
-	    gyroDeltaT_t = millis();
-	}
+    if (!strcmp(msgType, "DIS1"))
+    {
+	distance1 = strtol(val, 0, 10);
+	distance1_t = millis();
+    }
+    else if (!strcmp(msgType, "DIS2"))
+    {
+	distance2 = strtol(val, 0, 10);
+	distance2_t = millis();
+    }
     else if (!strcmp(msgType, "S1"))
-	{
-		switch1 = strtol(val, 0, 10);
-		switch1_t = millis();
-	}
+    {
+	switch1 = strtol(val, 0, 10);
+	switch1_t = millis();
+    }
     else if (!strcmp(msgType, "S2"))
-	{
-		switch2 = strtol(val, 0, 10);
-		switch2_t = millis();
-	}
+    {
+	switch2 = strtol(val, 0, 10);
+	switch2_t = millis();
+    }
 }
-
-
-
 
 
 float rollAngle = 0;
@@ -459,15 +370,15 @@ void Setup(int *fdSerial, const char *serialDev)
     *fdSerial = open(serialDev, O_RDWR | O_NOCTTY );
     if (*fdSerial < 0)
     {
-		printf("Failed to open tty device\n");
+	printf("Failed to open tty device\n");
         perror(serialDev);
         exit(-1);
     }
 
-	printf("Setting serial device attributes\n");
+    printf("Setting serial device attributes\n");
 
     tcgetattr(*fdSerial, &oldtio); /* save current serial port settings */
-	memset(&newtio, 0, sizeof(newtio));
+    memset(&newtio, 0, sizeof(newtio));
     /*
           BAUDRATE: Set bps rate. You could also use cfsetispeed and cfsetospeed.
           CRTSCTS : output hardware flow control (only used if the cable has
@@ -526,10 +437,7 @@ void Setup(int *fdSerial, const char *serialDev)
     tcflush(*fdSerial, TCIFLUSH);
     tcsetattr(*fdSerial,TCSANOW,&newtio);
 
-
-
     // Set up the PID controllers for heading and wall following
-//    SetHeading = 137.0;
     headingPIDInput = 0;
     headingPID.SetOutputLimits(-NORMAL_SPEED, NORMAL_SPEED);
     headingPID.SetMode(AUTOMATIC);
@@ -588,6 +496,7 @@ void SetServoAngle(int servo, int angle)
     write(fdSerial, outMsg, strlen(outMsg));
 }
 
+float prevHeading = 0;
 
 // Steer to heading subsumption task.  If active and not subsumed by a higher priority task, this will set the motor speeds
 // to steer to the given heading (SetHeading)
@@ -619,6 +528,15 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
     else if (diff < -180)
 	adjustedHeading -= 360;
 
+
+    // If we've just crossed the 0/360 boundary, reset the filter so the compass updates immediately
+    // instead of waiting for the filter to wrap around and catch up
+    if (filteredHeading < 90 && prevHeading > 270)
+	headingFilter.reset(0.125, 4, 1, 0);
+    else if (filteredHeading > 270 && prevHeading < 90)
+	headingFilter.reset(0.125, 4, 1, 360);
+    prevHeading = filteredHeading;
+
 //   if (SetHeading - filteredHeading > 180)
 //       filteredHeading += 360;
 //   else if (SetHeading - filteredHeading < -180)
@@ -640,8 +558,11 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
     fprintf(outFile, "Heading: %d\n", (int)filteredHeading);
     fprintf(outFile, "Target Heading: %d\n", (int)SetHeading);
     fprintf(outFile, "PID error:           %d\n", (int)headingPIDOutput);
+
+
     steerToHeadingControl->leftMotorPower = NORMAL_SPEED - headingPIDOutput;
     steerToHeadingControl->rightMotorPower = NORMAL_SPEED + headingPIDOutput;
+
     steerToHeadingControl->active = true;
 }
 

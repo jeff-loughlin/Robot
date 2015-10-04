@@ -8,7 +8,8 @@ private:
     double k; //kalman gain
 
 public:
-    Kalman(double _q, double _r, double _p, double _intial_value);
+    Kalman(double _q, double _r, double _p, double _initial_value);
     void update(double measurement);
     double GetValue() {return x;}
+    void reset(double _q, double _r, double _p, double _initial_value);
 };
