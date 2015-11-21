@@ -45,21 +45,27 @@ const int CAL_SAMPLES = 10;
 
 
 // Mag calibration constants
-short xMin = -321;
-short xMax = 251;
-short yMin = 3;
-short yMax = 589;
-short zMin = -527;//0;
-short zMax = 486;//768
+// xmin: -216      xmax: 620       ymin: -476      ymax: 320      zmin: -710       zmax: -436
 
+//short xMin = -321;
+//short xMax = 251;
+//short yMin = 3;
+//short yMax = 589;
+//short zMin = -527;//0;
+//short zMax = 486;//768
+
+//xmin: -235      xmax: 766       ymin: -257      ymax: 343      zmin: -708      zmax: -438
+short xMin = -235;
+short xMax = 343;
+short yMin = -257;
+short yMax = 343;
+short zMin = -672;
+short zMax = -438;
 
 
 
 FILE *outFile;
 
-// Get current waypoint.  TODO: change this from hard-coded values to something useful
-//float wpLatitude = 39.971821;
-//float wpLongitude = -75.736046;
 
 GeoCoordinate waypoints[256];
 int waypointCount = 0;
@@ -162,7 +168,7 @@ PID gyroPID(&gyroPIDInput, &gyroPIDOutput, &SetGyro,5,0,1, DIRECT);
 #define TILT_MIN 20
 #define TILT_MAX 165
 #define PAN_MID 100 /*90*/
-#define TILT_MID 160
+#define TILT_MID 130
 
 // Servo positions for pan/tilt camera servos
 int panServo = PAN_MID;   // defaults to mid point
@@ -1047,6 +1053,7 @@ static void *GpsThread(void *)
 		latitude_error = 0;
 		longitude_error = 0;
 		gps_fix = MODE_NO_FIX;
+		nofixCount++;
             }
             else
             {
@@ -1063,6 +1070,7 @@ static void *GpsThread(void *)
 			latitude_error = 0;
 			longitude_error = 0;
 			gps_fix = MODE_NO_FIX;
+			nofixCount++;
                     }
                     //otherwise you have a legitimate fix!
                     else
@@ -1135,6 +1143,9 @@ void *IMUThread(void *)
 
 
    long impactTimer = millis();
+   short prevGx = 0;
+   short prevGy = 0;
+   short prevGz = 0;
    while(readADXL345(fd,ax,ay,az) && readL3G4200D(fd,gx,gy,gz) && readHMC5883L(fd,mx,my,mz))
    {
         // Swap the x and y axes around because of sensor orientation
@@ -1254,10 +1265,11 @@ void *IMUThread(void *)
     pitchAngle = CFangleY;
 
     // Detect impacts
-    if (ouchEnabled && (abs(gx) > 300 || abs(gy) > 300 || abs(gz) > 300))
+    if (ouchEnabled && (abs(gx) > 250 || abs(gy) > 250 || abs(gz) > 250)
+			&& (abs(prevGx) > 250 || abs(prevGy) > 250 || abs(prevGz) > 250))
     {
-	// Only if it's been more than 10 seconds since the last impact, and we're not currently moving
-	if (millis() - impactTimer > 5000 && leftMotorPower == 0 && rightMotorPower == 0)
+	// Only if it's been more than 1 second since the last impact, and we're not currently moving
+	if (millis() - impactTimer > 1000 && leftMotorPower == 0 && rightMotorPower == 0)
 	{
 	    pid_t child_PID;
 	    child_PID = fork();
@@ -1279,6 +1291,9 @@ void *IMUThread(void *)
 	   impactTimer = millis();
 	}
     }
+    prevGx = gx;
+    prevGy = gy;
+    prevGz = gz;
 
 //      printf ("   GyroX  %7.3f \t AccXangle \e[m %7.3f \t \033[22;31mCFangleX %7.3f\033[0m\t GyroY  %7.3f \t AccYangle %7.3f \t \033[22;36mCFangleY %7.3f\t\033[0m Heading %7.3f gx=%d gy=%d gz=%d\n",gyroXangle,AccXangle,CFangleX,gyroYangle,AccYangle,CFangleY, heading, gx, gy, gz);
 //      printf ("   GyroX  %7.3f \t AccXangle \e[m %7.3f \t \033[22;31mCFangleX %7.3f\033[0m\t GyroY  %7.3f \t AccYangle %7.3f \t \033[22;36mCFangleY %7.3f\t\033[0m Heading %7.3f mx=%d my=%d mz=%d\n",gyroXangle,AccXangle,CFangleX,gyroYangle,AccYangle,CFangleY, heading, mx, my, mz);

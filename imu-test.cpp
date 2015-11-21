@@ -48,12 +48,12 @@ const short zMax = 555;
 #endif
 // xmin: -321      xmax: 251       ymin: 3         ymax: 589       zmin: 447       zmax: 542
 // xmin: -318      xmax: 252       ymin: 3         ymax: 593       zmin: -512      zmax: 770
-const short xMin = -321;
-const short xMax = 251;
-const short yMin = 3;
-const short yMax = 589;
-const short zMin = -527; //-768;
-const short zMax = 486; //532;
+const short xMin = 0;// -321;
+const short xMax = 0;// 251;
+const short yMin = 0;// 3;
+const short yMax = 0;// 589;
+const short zMin = 0;// -527;
+const short zMax = 0;// 486; //532;
 
 //xmin: -635      xmax: 467       ymin: -385      ymax: 820       zmin: -527      zmax: 486
 
@@ -279,12 +279,12 @@ int main(int argc, char **argv)
 
 
 
-
+#ifdef ZZZ
  mx = (float)mx - (float)(xMin + xMax) / 2;
  my = (float)my - (float)(yMin + yMax) / 2;
  mz = (float)mz - (float)(zMin + zMax) / 2;
 	float heading = fusionGetOrientation(ax, ay, az, my, mx, mz, gx, gy, gz, 180, 27);  // <<<--------
-
+#endif
 
 
 //      float heading = getHeading(CFangleX, CFangleY, mx, my, mz, ax, ay, az);
@@ -392,7 +392,7 @@ int main(int argc, char **argv)
 //      printf ("   GyroX  %7.3f \t AccXangle \e[m %7.3f \t \033[22;31mCFangleX %7.3f\033[0m\t GyroY  %7.3f \t AccYangle %7.3f \t \033[22;36mCFangleY %7.3f\t\033[0m Heading %7.3f gx=%d gy=%d gz=%d\n",gyroXangle,AccXangle,CFangleX,gyroYangle,AccYangle,CFangleY, heading, gx, gy, gz);
 ///      printf ("   GyroX  %7.3f \t AccXangle \e[m %7.3f \t \033[22;31mCFangleX %7.3f\033[0m\t GyroY  %7.3f \t AccYangle %7.3f \t \033[22;36mCFangleY %7.3f\t\033[0m Heading %7.3f mx=%d my=%d mz=%d\n",gyroXangle,AccXangle,CFangleX,gyroYangle,AccYangle,CFangleY, heading, mx, my, mz);
 //      printf("AccX Raw: %d \t AccY Raw: %d \t AccZ raw: %d\n", ax, ay, az);
-//      printf("MagX Raw: %d \t MagY Raw: %d \t MagZ Raw: %d \t xmin: %d \t xmax: %d \t ymin: %d \t ymax: %d \t zmin: %d \t zmax: %d\n", mx, my, mz, xmin, xmax, ymin, ymax, zmin, zmax);
+      printf("MagX Raw: %d \t MagY Raw: %d \t MagZ Raw: %d \t xmin: %d \t xmax: %d \t ymin: %d \t ymax: %d \t zmin: %d \t zmax: %d\n", mx, my, mz, xmin, xmax, ymin, ymax, zmin, zmax);
       usleep(10000);
 
       // Do this every 200 milliseconds or something
