@@ -23,5 +23,11 @@ $(TARGET): $(OBJS)
 ctrl: ctrl.cpp
 	$(CPP) $(CFLAGS) -o ctrl ctrl.cpp
 
+weather: weather.cpp
+	$(CPP) $(CFLAGS) -ljson -lcurl -o weather weather.cpp
+
+isdark: isdark.cpp
+	$(CPP) $(CFLAGS) -ljpeg -o isdark isdark.cpp
+
 clean:
 	$(RM) $(TARGET) $(OBJS)

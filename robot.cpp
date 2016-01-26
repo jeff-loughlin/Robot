@@ -55,13 +55,20 @@ const int CAL_SAMPLES = 10;
 //short zMax = 486;//768
 
 //xmin: -235      xmax: 766       ymin: -257      ymax: 343      zmin: -708      zmax: -438
-short xMin = -235;
-short xMax = 343;
-short yMin = -257;
-short yMax = 343;
-short zMin = -672;
-short zMax = -438;
+//short xMin = -235;
+//short xMax = 343;
+//short yMin = -257;
+//short yMax = 343;
+//short zMin = -672;
+//short zMax = -438;
 
+// xmin: -791      xmax: 509       ymin: -513      ymax: 766      zmin: -700       zmax: -196
+short yMax = 791;
+short yMin = -509;
+short xMin = -513;
+short xMax = 766;
+short zMin = -700;
+short zMax = -196;
 
 
 FILE *outFile;
@@ -103,7 +110,28 @@ unsigned long gyroX_t, gyroY_t, gyroZ_t;
 int gyroDeltaT;
 unsigned long gyroDeltaT_t;
 
+// Say "ouch" when bumped
 bool ouchEnabled = true;
+
+// Turn on laser pointer and play with cat
+bool catMode = false;
+struct CatModeCtrl
+{
+    static const int maxX = 160;
+    static const int minX = 20;
+    static const int maxY = 165;
+    static const int minY = 140;
+    int x;
+    int y;
+    int intervalX;
+    int intervalY;
+    int moveCnt;
+};
+struct CatModeCtrl catModeCtrl;
+
+bool scanMode = false;
+int scanPos = 90;
+int scanInterval = 1;
 
 // Actuator values (sent to serial link)
 int leftPower;
@@ -828,6 +856,29 @@ void ManualControl(ControlMode *manualControl)
         if ((currentWaypoint + val) < waypointCount && (currentWaypoint + val) >= 0)
 	    currentWaypoint += val;
     }
+    else if (!strcmp(msgType, "CAT"))
+    {
+	catMode = strtol(val, 0, 10);
+	catModeCtrl.intervalX = 1;
+	catModeCtrl.intervalY = 0;
+	catModeCtrl.x = catModeCtrl.minX + (catModeCtrl.maxX - catModeCtrl.minX) / 2;
+	catModeCtrl.y = catModeCtrl.minY + (catModeCtrl.maxY - catModeCtrl.minY) / 2;
+	autonomous = false;
+	char outMsg[256];
+	sprintf(outMsg, "R1:%d\r", catMode);
+	write(fdSerial, outMsg, strlen(outMsg));
+    }
+    else if (!strcmp(msgType, "LAS"))
+    {
+	int value = strtol(val, 0, 10);
+	char outMsg[256];
+	sprintf(outMsg, "R1:%d\r", value);
+	write(fdSerial, outMsg, strlen(outMsg));
+    }
+    else if (!strcmp(msgType, "SCN"))
+    {
+	scanMode = strtol(val, 0, 10);
+    }
     manualControl->active = !autonomous;
     manualControl->leftMotorPower = manualPowerLeft;
     manualControl->rightMotorPower = manualPowerRight;
@@ -921,6 +972,40 @@ void ProcessSubsumptionTasks()
     else
     {
         fprintf(outFile, "ManualControl: Inactive\n");
+    }
+    if (catMode)
+    {
+	catModeCtrl.x += catModeCtrl.intervalX;
+	catModeCtrl.y += catModeCtrl.intervalY;
+	if (catModeCtrl.y > catModeCtrl.maxY)
+	    catModeCtrl.y = catModeCtrl.maxY;
+	if (catModeCtrl.y < catModeCtrl.minY)
+	    catModeCtrl.y = catModeCtrl.minY;
+	if (catModeCtrl.x > catModeCtrl.maxX)
+	    catModeCtrl.x = catModeCtrl.maxX;
+	if (catModeCtrl.x < catModeCtrl.minX)
+	    catModeCtrl.x = catModeCtrl.minX;
+
+	if (catModeCtrl.moveCnt == 10)
+	{
+	    catModeCtrl.moveCnt = 0;
+	    catModeCtrl.intervalX = rand() % 3 - 1;
+	    catModeCtrl.intervalY = rand() % 3 - 1;
+	}
+	catModeCtrl.moveCnt++;
+	printf("catMode.x = %d\ncatMode.y = %d\n", catModeCtrl.x, catModeCtrl.y);
+	SetServoAngle(PAN_SERVO, catModeCtrl.x);
+	SetServoAngle(TILT_SERVO, catModeCtrl.y);
+    }
+    if (scanMode)
+    {
+	panServo += scanInterval;
+	if (panServo > PAN_MAX || panServo < 10)
+	{
+	    scanInterval = -scanInterval;
+	    panServo += scanInterval;
+	}
+	SetServoAngle(PAN_SERVO, panServo);
     }
     if (0)
     {
@@ -1062,7 +1147,9 @@ static void *GpsThread(void *)
                 {
                     //sometimes if your GPS doesnt have a fix, it sends you data anyway
                     //the values for the fix are NaN. this is a clever way to check for NaN.
-                    if(gpsData.fix.longitude != gpsData.fix.longitude || gpsData.fix.altitude != gpsData.fix.altitude)
+		    //Also assume we have no fix if the epx or epy fix values (accuracy) are 0
+                    if(gpsData.fix.longitude != gpsData.fix.longitude || gpsData.fix.altitude != gpsData.fix.altitude ||
+			gpsData.fix.epx != gpsData.fix.epx || gpsData.fix.epy != gpsData.fix.epy)
                     {
 //                        fprintf(stderr,"Could not get a GPS fix.\n");
 			latitude = 0.0;
@@ -1070,6 +1157,7 @@ static void *GpsThread(void *)
 			latitude_error = 0;
 			longitude_error = 0;
 			gps_fix = MODE_NO_FIX;
+			gpsData.status = STATUS_NO_FIX;
 			nofixCount++;
                     }
                     //otherwise you have a legitimate fix!
@@ -1197,15 +1285,15 @@ void *IMUThread(void *)
         // We get bogus readings from the magnetometer sometimes.  I don't know why.  Skip this iteration if the readings are way out of whack
 	if (mx > -1000 && mx < 1000 && my > -1000 && my < 1000 && mz > -1000 && mz < 1000)
 	{
-	magX = mx;
-	magY = my;
-	magZ = mz;
-	accelX = ax;
-	accelY = ay;
-	accelZ = az;
-	gyroX = gx;
-	gyroY = gy;
-	gyroZ = gz;
+	    magX = mx;
+	    magY = my;
+	    magZ = mz;
+	    accelX = ax;
+	    accelY = ay;
+	    accelZ = az;
+	    gyroX = gx;
+	    gyroY = gy;
+	    gyroZ = gz;
 	}
 	else
 	{
@@ -1218,47 +1306,47 @@ void *IMUThread(void *)
 
 
 
-      //Convert Gyro raw to degrees per second
+      // Convert the raw Gyro values to degrees per second
       rate_gyr_x = (float)gx * G_GAIN;
       rate_gyr_y = (float)gy * G_GAIN;
       rate_gyr_z = (float)gz * G_GAIN;
 
-      //Calculate the angles from the gyros
-      gyroXangle += rate_gyr_x*DT;
-      gyroYangle += rate_gyr_y*DT;
-      gyroZangle += rate_gyr_z*DT;
+      // Calculate the X, Y, and Z angles from the gyros
+      gyroXangle += rate_gyr_x * DT;
+      gyroYangle += rate_gyr_y * DT;
+      gyroZangle += rate_gyr_z * DT;
 
-      //Convert Accelerometer values to degrees
+      // Convert the accelerometer values to rotation angles in degrees
       AccXangle = (float) (atan2(ay,az)/*+M_PI*/)*RAD_TO_DEG;
       AccYangle = (float) (atan2(ax,az)/*+M_PI*/)*RAD_TO_DEG;
 
 
-      //Change the rotation value of the accelerometer to -/+ 180
-      if (AccXangle >180)
+      // Convert the rotation value of the accelerometers to -/+ 180 degrees
+      if (AccXangle > 180)
       {
           AccXangle -= (float)360.0;
       }
-      if (AccYangle >180)
+      if (AccYangle > 180)
           AccYangle -= (float)360.0;
 
 //      AccYangle = -AccYangle;
 
 
       // Complementary filter used to combine the accelerometer and gyro values.
-      CFangleX=AA*(CFangleX+rate_gyr_x*DT) +(1 - AA) * AccXangle;
-      CFangleY=AA*(CFangleY+rate_gyr_y*DT) +(1 - AA) * AccYangle;
+      CFangleX = AA * (CFangleX+rate_gyr_x * DT) + (1 - AA) * AccXangle;
+      CFangleY = AA * (CFangleY+rate_gyr_y * DT) + (1 - AA) * AccYangle;
 
 
 
       // Get the compass heading based on the roll and pitch angles and the magnetometer readings
 ///      heading = getIMUHeading(CFangleX, CFangleY, mx, my, mz);
 
-       // Hard iron compensation
-       float cx = mx - (xMin + xMax) / 2;
-       float cy = my - (yMin + yMax) / 2;
-       float cz = mz - (zMin + zMax) / 2;
+    // Hard iron compensation
+    float cx = mx - (xMin + xMax) / 2;
+    float cy = my - (yMin + yMax) / 2;
+    float cz = mz - (zMin + zMax) / 2;
 
-       heading = getHeading(ax, ay, az, cy, cx, -cz, gx, gy, gz, 180, 0);
+    heading = getHeading(ax, ay, az, cy, cx, -cz, gx, gy, gz, 180, 0);
 
 
     rollAngle = CFangleX;

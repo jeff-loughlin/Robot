@@ -137,6 +137,8 @@ void setup()
     delay(2000);
 
     pinMode(13, OUTPUT);
+    pinMode(12, OUTPUT);
+    digitalWrite(12, HIGH);
 //    calibrate();
 
     SetMotorSpeed(LEFT_MOTOR, 0);
@@ -246,6 +248,7 @@ void loop()
             int level = strtol(val, 0, 10);
             digitalWrite(13, level);
 
+
             // Reset the beacon timer.  If we don't get a LED message within 2 seconds, we'll shut everything down
             beaconTime = millis();
         }
@@ -261,6 +264,11 @@ void loop()
             int angle = strtol(val, 0, 10);
             servo2.write(angle);
         }
+	else if (!strcmp(msgType, "R1"))
+	{
+	    int value = strtol(val, 0, 10);
+	    digitalWrite(12, !value);
+	}
         else if (!strcmp(msgType, "CAL"))
         {
             calibrateMagSensor();
@@ -280,16 +288,6 @@ void loop()
     {
         char outMsg[256];
 
-
-        // Get a reading from the heading sensor
-//      float actualHeading = getcompasscourse();
-//      kalmanFilter.update(actualHeading);
-//      actualHeading = kalmanFilter.GetValue();
-
-        // Send it to the controller
-//      sprintf(outMsg, "H:%d\r", (int)actualHeading);
-//      Serial.print(outMsg);
-
         // Get readings from the distance sensors
         int distance1 = 0;
 	int distance2 = 0;
@@ -301,104 +299,12 @@ void loop()
         sprintf(outMsg, "DIS2:%d\r", distance2);
         Serial.print(outMsg);
 
-#ifdef JUNK
-        // Get a reading from the GPS
-        long latitude = latArray[gpsCnt];
-        long longitude = longArray[gpsCnt];
-        gpsCnt++;
-        if (gpsCnt > GPSMAX - 1)
-            gpsCnt = 0;
-        char latStr[16];
-        char longStr[16];
-        sprintf(latStr, "%li", latitude);
-        sprintf(longStr, "%li", longitude);
-        for (char *c = latStr + strlen(latStr) + 1; c > latStr + 1; c--)
-            *c = *(c - 1);
-        latStr[2] = '.';
-
-        for (char *c = longStr + strlen(longStr) - 1; c > longStr + 2; c--)
-          *c = *(c - 1);
-        longStr[3] = '.';
-
-
-
-        // Send it to the controller
-//        sprintf(outMsg, "LA:40.123456\r");
-        sprintf(outMsg, "LA:%s\r", latStr);
-        Serial.print(outMsg);
-//        sprintf(outMsg, "LO:-75.654321\r");
-        sprintf(outMsg, "LO:%s\r", longStr);
-        Serial.print(outMsg);
-#endif
-
-
-#ifdef PUT_THIS_BACK_WHEN_IMU_CONNECTED    
-        // Get raw magnetometer data
-        int mX, mY, mZ;
-        getRawMagData(&mX, &mY, &mZ);
-    
-        // Send it to the controller
-        sprintf(outMsg, "MX:%d\r", mX);
-        Serial.print(outMsg);
-        sprintf(outMsg, "MY:%d\r", mY);
-        Serial.print(outMsg);
-        sprintf(outMsg, "MZ:%d\r", mZ);
-        Serial.print(outMsg);
-    
-        // Get raw accelerometer data
-        float aX, aY, aZ;
-        getRawAccelData(&aX, &aY, &aZ);
-    
-        // Send it to the controller
-        sprintf(outMsg, "AX:%d\r", (int)(aX * 100));
-        Serial.print(outMsg);
-        sprintf(outMsg, "AY:%d\r", (int)(aY * 100));
-        Serial.print(outMsg);
-        sprintf(outMsg, "AZ:%d\r", (int)(aZ * 100));
-        Serial.print(outMsg);
-
-        // Get raw gyro data
-        int gX, gY, gZ;
-        int gyroDeltaT;
-        getRawGyroData(&gX, &gY, &gZ, &gyroDeltaT);
-
-        // Send it to the controller
-        sprintf(outMsg, "GX:%d\r", gX);
-        Serial.print(outMsg);
-        sprintf(outMsg, "GY:%d\r", gY);
-        Serial.print(outMsg);
-        sprintf(outMsg, "GZ:%d\r", gZ);
-        Serial.print(outMsg);
-        sprintf(outMsg, "GDT:%d\r", gyroDeltaT);
-        Serial.print(outMsg);        
-#endif
-
 
         // Get the state of switch1
         // Send it to the controller
         sprintf(outMsg, "S1:%d\r", switch1);
         Serial.print(outMsg);
 
-#if 0
-        if (millis() - calibrationTime > 1000)
-        {
-        // Send calibration data to controller once every second
-            sprintf(outMsg, "CXMIN:%d\r", xMin);
-            Serial.print(outMsg);
-            sprintf(outMsg, "CYMIN:%d\r", yMin);
-            Serial.print(outMsg);
-            sprintf(outMsg, "CZMIN:%d\r", zMin);
-            Serial.print(outMsg);
-            sprintf(outMsg, "CXMAX:%d\r", xMax);
-            Serial.print(outMsg);
-            sprintf(outMsg, "CYMAX:%d\r", yMax);
-            Serial.print(outMsg);
-            sprintf(outMsg, "CZMAX:%d\r", zMax);
-            Serial.print(outMsg);
-            calibrationTime = millis();
-        }
-#endif
-        
         lastTime = millis();
     }    
 }
