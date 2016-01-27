@@ -212,6 +212,8 @@ int manualServoTilt = TILT_MID;
 // Autonomous control or manual control?  This gets set to false when a manual command comes in through the FIFO
 bool autonomous = false;
 
+char lightStatus[256];  // Hold the result of isdark calls - used only to output the light/dark status information
+
 
 // Quick and dirty function to get elapsed time in milliseconds.  This will wrap at 32 bits (unsigned long), so
 // it's not an absolute time-since-boot indication.  It is useful for measuring short time intervals in constructs such
@@ -1450,6 +1452,165 @@ void ReadWaypointsFile()
     fclose(waypointFile);
 }
 
+void speak(const char *str)
+{
+    pid_t child_PID;
+    child_PID = fork();
+    if(child_PID >= 0)
+    {
+	if(child_PID == 0)
+	{
+	    // Child process
+//	    printf("Child process! PID=%d, Parent PID=%d\n", getpid(), getppid());
+    	    execl("/usr/bin/espeak", "/usr/bin/espeak", "-s 110", str, (char *)0);
+	    _exit(0);
+	}
+	else
+        {
+            int status;
+            waitpid(child_PID, &status, 0);
+        }
+   }
+}
+
+bool isDark()
+{
+    FILE *fp = popen("./isdark /var/www/cam.jpg", "r");
+    if (fp == NULL)
+	return false;
+
+    char result[256];
+
+    fgets(result, 256, fp);
+
+    pclose(fp);
+
+    strcpy(lightStatus, result);
+    if (strncmp(result, "Dark", 4) == 0)
+	return true;
+
+    return false;
+}
+
+void giveGreeting()
+{
+    // Turn toward the kitchen
+    int savedPan = panServo;
+    int savedTilt = tiltServo;
+    int panInterval = panServo < 43 ? 1 : -1;
+    int tiltInterval = tiltServo < 120 ? 1 : -1;
+    while (panServo != 43 || tiltServo != 120)
+    {
+	if (panServo == 43)
+	    panInterval = 0;
+	if (tiltServo == 120)
+	    tiltInterval = 0;
+
+        panServo += panInterval;
+	tiltServo += tiltInterval;
+
+	SetServoAngle(PAN_SERVO, panServo);
+	usleep(10000);
+	SetServoAngle(TILT_SERVO, tiltServo);
+	usleep(10000);
+
+	// Safety measures - this should never happen.  If any of these conditions are met, something has gone wrong.
+	// Break out of the loop so we don't burn up the servos
+	if (panInterval == -1 && panServo < 30)
+	    break;
+	if (panInterval == 1 && panServo > 50)
+	    break;
+	if (tiltInterval == -1 && tiltServo < 110)
+	    break;
+	if (tiltInterval == 1 && tiltServo > 130)
+	    break;
+    }
+
+    // Get the weather
+    FILE *fp = popen("./weather", "r");
+    if (fp == NULL)
+	return;
+
+    char weather[256] = "";
+    fgets(weather, 256, fp);
+
+    pclose(fp);
+
+    char greeting[256];
+    strcpy(greeting, "Good morning.");
+    if (0)//strlen(weather))
+    {
+	strcat(greeting,"  Today's weather will be ");
+	strcat(greeting, weather);
+    }
+
+    speak(greeting);
+
+    sleep(5);
+    panServo = savedPan;
+    tiltServo = savedTilt;
+    SetServoAngle(PAN_SERVO, panServo);
+    SetServoAngle(TILT_SERVO, tiltServo);
+}
+
+static void *GreetingThread(void *)
+{
+    // Once a day - as soon as the lights go on after being in the dark all night - greet me with a "good morning" and
+    // the day's weather report.
+    bool gaveGreetingToday = false;
+    bool inTheDark = false;
+    long timeInDark = 0;
+    int darkCount = 0;
+
+    while (1)
+    {
+	time_t now = time(0);
+	struct tm *time_tm = localtime(&now);
+	if (time_tm->tm_hour < 1)
+	{
+	    // It's after midnight - a new day, so reset the gaveGreeting flag
+	    gaveGreetingToday = false;
+	}
+	if (isDark())
+	{
+	    if (!inTheDark)
+	    {
+		// It's dark now, and it wasn't dark the last time through the loop.  If we're still in the dark after 10
+		//  iterations, we're in the dark and staying that way
+		darkCount++;
+		if (darkCount == 10)
+		{
+		    inTheDark = true;
+		    darkCount = 0;
+		    timeInDark = millis();
+		}
+	    }
+	}
+	else
+	{
+	    // We're not in the dark.  If we were in the dark the last time through the loop, then somebody turned on the
+	    // lights.  Check the time - if it's after 5 AM and we've been in the darm for more than 3 hours, and we haven't
+	    // given the greeting yet, give the greeting
+	    if (inTheDark)
+	    {
+		if (millis() - timeInDark > 3600000 * 3)
+		{
+		    if (!gaveGreetingToday && time_tm->tm_hour < 12)
+		    {
+			giveGreeting();
+			gaveGreetingToday = true;
+		    }
+		}
+	    }
+	    inTheDark = false;
+	    darkCount = 0;
+	    timeInDark = millis();
+	}
+    	usleep(1000000);
+    }
+    return NULL;
+}
+
 
 int calFlag = 0;
 int waypointFlag = 1;  // default
@@ -1528,8 +1689,13 @@ int main(int argc, char **argv)
     pthread_create(&gpsThreadId, NULL, GpsThread, NULL);
 
     printf("Starting ReadSerial thread\n");
-    pthread_t threadId;
-    pthread_create(&threadId, NULL, ReadSerialThread, NULL);
+    pthread_t serialThreadId;
+    pthread_create(&serialThreadId, NULL, ReadSerialThread, NULL);
+
+    printf("Starting Greeting thread\n");
+    pthread_t greetingThreadId;
+    pthread_create(&greetingThreadId, NULL, GreetingThread, NULL);
+
     sleep(2);
 
     if (calFlag)
@@ -1596,6 +1762,7 @@ int main(int argc, char **argv)
 	    printf("    Longitude accuracy: %dm\n", (int)longitude_error);
             printf("Distance1: %d\n", distance1);
             printf("Distance2: %d\n", distance2);
+            printf("Light status: %s", lightStatus);
             printf("LED: %s\n\n", led ? "ON" : "OFF");
 
 	    fprintf(outFile, "Waypoint Range: %1.1fm\n", waypointRange * 1000);
@@ -1619,6 +1786,7 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "Longitude accuracy: %dm\n", (int)longitude_error);
             fprintf(outFile, "Distance1: %d\n", distance1);
             fprintf(outFile, "Distance2: %d\n", distance2);
+	    fprintf(outFile, "Light status: %s\n", lightStatus);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 
             lastSubMillis = millis();
