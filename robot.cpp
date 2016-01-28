@@ -17,6 +17,7 @@
 #include "geocoords.h"
 #include "gps.h"
 #include "imu.h"
+#include <jpeglib.h>
 
 //#define _POSIX_SOURCE 1 /* POSIX compliant source */
 
@@ -212,8 +213,8 @@ int manualServoTilt = TILT_MID;
 // Autonomous control or manual control?  This gets set to false when a manual command comes in through the FIFO
 bool autonomous = false;
 
-char lightStatus[256];  // Hold the result of isdark calls - used only to output the light/dark status information
-
+//char lightStatus[256];  // Hold the result of isdark calls - used only to output the light/dark status information
+float lightIntensity = 0.0;
 
 // Quick and dirty function to get elapsed time in milliseconds.  This will wrap at 32 bits (unsigned long), so
 // it's not an absolute time-since-boot indication.  It is useful for measuring short time intervals in constructs such
@@ -1473,8 +1474,9 @@ void speak(const char *str)
    }
 }
 
-bool isDark()
+float getLightLevel()
 {
+/*
     FILE *fp = popen("./isdark /var/www/cam.jpg", "r");
     if (fp == NULL)
 	return false;
@@ -1490,6 +1492,90 @@ bool isDark()
 	return true;
 
     return false;
+*/
+
+ try
+ {
+  const char *Name = "/var/www/cam.jpg";
+
+  unsigned char a, r, g, b;
+  int width, height;
+  struct jpeg_decompress_struct cinfo;
+  struct jpeg_error_mgr jerr;
+
+  FILE * infile;        /* source file */
+  JSAMPARRAY pJpegBuffer;       /* Output row buffer */
+  int row_stride;       /* physical row width in output buffer */
+  if ((infile = fopen(Name, "rb")) == NULL)
+  {
+    fprintf(stderr, "can't open %s\n", Name);
+    return 0;
+  }
+  cinfo.err = jpeg_std_error(&jerr);
+  jpeg_create_decompress(&cinfo);
+  jpeg_stdio_src(&cinfo, infile);
+  (void) jpeg_read_header(&cinfo, TRUE);
+  (void) jpeg_start_decompress(&cinfo);
+  width = cinfo.output_width;
+  height = cinfo.output_height;
+
+//  unsigned char * pDummy = new unsigned char [width*height*4];
+//  unsigned char * pTest = pDummy;
+//  if (!pDummy)
+//  {
+//    printf("NO MEM FOR JPEG CONVERT!\n");
+//    return 0;
+//  }
+  row_stride = width * cinfo.output_components;
+  pJpegBuffer = (*cinfo.mem->alloc_sarray)
+    ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+
+  int pixCount = 0;
+  int total = 0;
+  while (cinfo.output_scanline < cinfo.output_height)
+  {
+    (void) jpeg_read_scanlines(&cinfo, pJpegBuffer, 1);
+    for (int x = 0; x < width; x++)
+    {
+      a = 0; // alpha value is not supported on jpg
+      r = pJpegBuffer[0][cinfo.output_components * x];
+      if (cinfo.output_components > 2)
+      {
+        g = pJpegBuffer[0][cinfo.output_components * x + 1];
+        b = pJpegBuffer[0][cinfo.output_components * x + 2];
+      }
+      else
+      {
+        g = r;
+        b = r;
+      }
+//      *(pDummy++) = b;
+//      *(pDummy++) = g;
+//      *(pDummy++) = r;
+//      *(pDummy++) = a;
+
+      int intensity = (r + g + b) / 3;
+      total += intensity;
+      pixCount++;
+    }
+  }
+  fclose(infile);
+  (void) jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+
+//  BMap = (int*)pTest;
+//  Height = height;
+//  Width = width;
+//  Depth = 32;
+
+  lightIntensity = (float)total / (float)pixCount;
+
+ }
+ catch(...)
+ {
+    lightIntensity = -1;
+ }
+  return lightIntensity;
 }
 
 void giveGreeting()
@@ -1571,7 +1657,7 @@ static void *GreetingThread(void *)
 	    // It's after midnight - a new day, so reset the gaveGreeting flag
 	    gaveGreetingToday = false;
 	}
-	if (isDark())
+	if (getLightLevel() < 30)
 	{
 	    if (!inTheDark)
 	    {
@@ -1759,10 +1845,10 @@ int main(int argc, char **argv)
             printf("    Latitude: %f\n", latitude);
             printf("    Longitude: %f\n", longitude);
 	    printf("    Latitude Accuracy: %dm\n", (int)latitude_error);
-	    printf("    Longitude accuracy: %dm\n", (int)longitude_error);
+	    printf("    Longitude Accuracy: %dm\n", (int)longitude_error);
             printf("Distance1: %d\n", distance1);
             printf("Distance2: %d\n", distance2);
-            printf("Light status: %s", lightStatus);
+            printf("Light Intensity: %3.2f\n", lightIntensity);
             printf("LED: %s\n\n", led ? "ON" : "OFF");
 
 	    fprintf(outFile, "Waypoint Range: %1.1fm\n", waypointRange * 1000);
@@ -1786,7 +1872,7 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "Longitude accuracy: %dm\n", (int)longitude_error);
             fprintf(outFile, "Distance1: %d\n", distance1);
             fprintf(outFile, "Distance2: %d\n", distance2);
-	    fprintf(outFile, "Light status: %s\n", lightStatus);
+	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 
             lastSubMillis = millis();

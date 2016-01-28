@@ -15,7 +15,7 @@ TARGET = robot
 all: $(TARGET) ctrl
 
 $(TARGET): $(OBJS)
-	$(CPP) -g -lm -lusb-1.0 -lc -lgps -pthread -o $@ $^
+	$(CPP) -g -lm -lusb-1.0 -lc -lgps -ljpeg -pthread -o $@ $^
 
 %.o : %.cpp include.h
 	$(CPP) $(CFLAGS) -o $@ -c $<
@@ -25,9 +25,6 @@ ctrl: ctrl.cpp
 
 weather: weather.cpp
 	$(CPP) $(CFLAGS) -ljson -lcurl -o weather weather.cpp
-
-isdark: isdark.cpp
-	$(CPP) $(CFLAGS) -ljpeg -o isdark isdark.cpp
 
 clean:
 	$(RM) $(TARGET) $(OBJS)
