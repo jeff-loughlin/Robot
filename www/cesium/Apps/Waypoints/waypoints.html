@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+  <title>Define Waypoints</title>
+  <script src="../../Build/Cesium/Cesium.js"></script>
+  <style>
+      @import url(../../Build/Cesium/Widgets/widgets.css);
+      html, body, #cesiumContainer {
+          width: 100%; height: 90%; margin: 0; padding: 0; overflow: hidden;
+      }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <span>
+    <button onclick="clearButtonClicked()">Clear</button>
+    <form action="savewaypoints.php" method="post" onSubmit="return saveButtonClicked(this);">
+       <input type="submit" value="Save">
+    </form>
+  </span>
+  <script src="waypoints.js"></script>
+</body>
+</html>
+
