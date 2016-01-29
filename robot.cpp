@@ -1661,10 +1661,10 @@ static void *GreetingThread(void *)
 	{
 	    if (!inTheDark)
 	    {
-		// It's dark now, and it wasn't dark the last time through the loop.  If we're still in the dark after 10
+		// It's dark now, and it wasn't dark the last time through the loop.  If we're still in the dark after 5
 		//  iterations, we're in the dark and staying that way
 		darkCount++;
-		if (darkCount == 10)
+		if (darkCount == 5)
 		{
 		    inTheDark = true;
 		    darkCount = 0;
@@ -1675,13 +1675,13 @@ static void *GreetingThread(void *)
 	else
 	{
 	    // We're not in the dark.  If we were in the dark the last time through the loop, then somebody turned on the
-	    // lights.  Check the time - if it's after 5 AM and we've been in the darm for more than 3 hours, and we haven't
+	    // lights.  Check the time - if it's after 5 AM and we've been in the dark for more than 3 hours, and we haven't
 	    // given the greeting yet, give the greeting
 	    if (inTheDark)
 	    {
 		if (millis() - timeInDark > 3600000 * 3)
 		{
-		    if (!gaveGreetingToday && time_tm->tm_hour < 12)
+		    if (!gaveGreetingToday && time_tm->tm_hour >= 5 && time_tm->tm_hour < 12)
 		    {
 			giveGreeting();
 			gaveGreetingToday = true;
