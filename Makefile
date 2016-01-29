@@ -20,6 +20,8 @@ $(TARGET): $(OBJS)
 %.o : %.cpp include.h
 	$(CPP) $(CFLAGS) -o $@ -c $<
 
+
+# Some other stuff we need - manual control program and the weather app
 ctrl: ctrl.cpp
 	$(CPP) $(CFLAGS) -o ctrl ctrl.cpp
 
