@@ -18,6 +18,7 @@
 #include "gps.h"
 #include "imu.h"
 #include <jpeglib.h>
+#include <stdexcept>
 
 //#define _POSIX_SOURCE 1 /* POSIX compliant source */
 
@@ -215,6 +216,10 @@ bool autonomous = false;
 
 //char lightStatus[256];  // Hold the result of isdark calls - used only to output the light/dark status information
 float lightIntensity = 0.0;
+bool gaveGreetingToday = false;
+bool inTheDark = false;
+unsigned long timeInDark = 0;
+int darkCount = 0;
 
 // Quick and dirty function to get elapsed time in milliseconds.  This will wrap at 32 bits (unsigned long), so
 // it's not an absolute time-since-boot indication.  It is useful for measuring short time intervals in constructs such
@@ -1474,12 +1479,21 @@ void speak(const char *str)
    }
 }
 
+void jpegErrorExit ( j_common_ptr cinfo )
+{
+    char jpegLastErrorMsg[JMSG_LENGTH_MAX];
+    /* Create the message */
+    ( *( cinfo->err->format_message ) ) ( cinfo, jpegLastErrorMsg );
+
+    /* Jump to the setjmp point */
+    throw std::runtime_error( jpegLastErrorMsg ); // or your preffered exception ...
+}
+
 float getLightLevel()
 {
-/*
-    FILE *fp = popen("./isdark /var/www/cam.jpg", "r");
+    FILE *fp = popen("./intensity /var/www/cam.jpg", "r");
     if (fp == NULL)
-	return false;
+	return 0.0;
 
     char result[256];
 
@@ -1487,23 +1501,22 @@ float getLightLevel()
 
     pclose(fp);
 
-    strcpy(lightStatus, result);
-    if (strncmp(result, "Dark", 4) == 0)
-	return true;
+    lightIntensity = atof(result);
 
-    return false;
-*/
+    return lightIntensity;
 
+#ifdef JUNK
+ struct jpeg_decompress_struct cinfo;
+ struct jpeg_error_mgr jerr;
+ FILE *infile;        /* source file */
  try
  {
   const char *Name = "/var/www/cam.jpg";
 
-  unsigned char a, r, g, b;
-  int width, height;
-  struct jpeg_decompress_struct cinfo;
-  struct jpeg_error_mgr jerr;
+  unsigned char r, g, b;
+  int width;
+//  struct jpeg_error_mgr jerr;
 
-  FILE * infile;        /* source file */
   JSAMPARRAY pJpegBuffer;       /* Output row buffer */
   int row_stride;       /* physical row width in output buffer */
   if ((infile = fopen(Name, "rb")) == NULL)
@@ -1511,13 +1524,15 @@ float getLightLevel()
     fprintf(stderr, "can't open %s\n", Name);
     return 0;
   }
-  cinfo.err = jpeg_std_error(&jerr);
+  cinfo.err = jpeg_std_error( &jerr );
+  jerr.error_exit = jpegErrorExit;
+//  cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_decompress(&cinfo);
   jpeg_stdio_src(&cinfo, infile);
   (void) jpeg_read_header(&cinfo, TRUE);
   (void) jpeg_start_decompress(&cinfo);
   width = cinfo.output_width;
-  height = cinfo.output_height;
+//  height = cinfo.output_height;
 
 //  unsigned char * pDummy = new unsigned char [width*height*4];
 //  unsigned char * pTest = pDummy;
@@ -1537,7 +1552,7 @@ float getLightLevel()
     (void) jpeg_read_scanlines(&cinfo, pJpegBuffer, 1);
     for (int x = 0; x < width; x++)
     {
-      a = 0; // alpha value is not supported on jpg
+//      a = 0; // alpha value is not supported on jpg
       r = pJpegBuffer[0][cinfo.output_components * x];
       if (cinfo.output_components > 2)
       {
@@ -1569,13 +1584,17 @@ float getLightLevel()
 //  Depth = 32;
 
   lightIntensity = (float)total / (float)pixCount;
-
  }
- catch(...)
+ catch (...)
  {
+    printf("Caught error\n\n");
+    jpeg_destroy_decompress( &cinfo );
+    if (infile)
+	fclose( infile );
     lightIntensity = -1;
  }
-  return lightIntensity;
+ return lightIntensity;
+#endif
 }
 
 void giveGreeting()
@@ -1643,10 +1662,6 @@ static void *GreetingThread(void *)
 {
     // Once a day - as soon as the lights go on after being in the dark all night - greet me with a "good morning" and
     // the day's weather report.
-    bool gaveGreetingToday = false;
-    bool inTheDark = false;
-    long timeInDark = 0;
-    int darkCount = 0;
 
     while (1)
     {
@@ -1679,7 +1694,7 @@ static void *GreetingThread(void *)
 	    // given the greeting yet, give the greeting
 	    if (inTheDark)
 	    {
-		if (millis() - timeInDark > 3600000 * 3)
+		if (abs(millis() - timeInDark) > 60000 * 3)
 		{
 		    if (!gaveGreetingToday && time_tm->tm_hour >= 5 && time_tm->tm_hour < 12)
 		    {
@@ -1850,6 +1865,10 @@ int main(int argc, char **argv)
             printf("Distance2: %d\n", distance2);
             printf("Light Intensity: %3.2f\n", lightIntensity);
             printf("LED: %s\n\n", led ? "ON" : "OFF");
+	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
+	    printf("Dark: %s\n", inTheDark?"true":"false");
+	    printf("Dark timer: %lu\n", timeInDark);
+	    printf("Dark Counter: %d\n", darkCount);
 
 	    fprintf(outFile, "Waypoint Range: %1.1fm\n", waypointRange * 1000);
             fprintf(outFile, "Pan Servo: %d\n", panServo);
