@@ -19,23 +19,8 @@
 #include "imu.h"
 #include <jpeglib.h>
 #include <stdexcept>
-
-//#define _POSIX_SOURCE 1 /* POSIX compliant source */
-
-//#define PI 3.14159265
-#define RADTODEG (180 / PI)
-#define DEGTORAD (PI / 180)
-
-#define BAUDRATE B115200
-
-#define MAX_SPEED 150
-#define NORMAL_SPEED 50
-#define LEFT_MOTOR 0
-#define RIGHT_MOTOR 1
-
-#define SUBSUMPTION_INTERVAL 100
-#define LED_BLINK_INTERVAL 1000
-#define CALCULATE_GPS_HEADING_INTERVAL 1000
+#include <errno.h>
+#include "robot.h"
 
 
 float G_GAIN = 0.07; //0.00875; //0.07;
@@ -117,18 +102,6 @@ bool ouchEnabled = true;
 
 // Turn on laser pointer and play with cat
 bool catMode = false;
-struct CatModeCtrl
-{
-    static const int maxX = 160;
-    static const int minX = 20;
-    static const int maxY = 165;
-    static const int minY = 140;
-    int x;
-    int y;
-    int intervalX;
-    int intervalY;
-    int moveCnt;
-};
 struct CatModeCtrl catModeCtrl;
 
 bool scanMode = false;
@@ -154,16 +127,6 @@ int gyroXCal = 0, gyroYCal = 0, gyroZCal = 0;
 // Accelerometer calibration values
 int accelXCal = 0, accelYCal = 0, accelZCal = 980;
 
-// Subsumption task control class
-class ControlMode
-{
-public:
-    bool active;
-    int leftMotorPower;
-    int rightMotorPower;
-
-    ControlMode() {active = false; leftMotorPower = 0; rightMotorPower = 0; };
-};
 
 
 // Kalman filters for smoothing magnetometerm, accelerometer, and calculated heading data
@@ -190,20 +153,10 @@ PID wallFollowerPID(&wallPIDInput, &wallPIDOutput, &SetDistance, 5, .1, .5, DIRE
 double SetGyro, gyroPIDInput, gyroPIDOutput;
 PID gyroPID(&gyroPIDInput, &gyroPIDOutput, &SetGyro,5,0,1, DIRECT);
 
-// Constants for the pan/tilt camera servos
-#define PAN_SERVO 1
-#define TILT_SERVO 2
-#define PAN_MIN -40
-#define PAN_MAX 160
-#define TILT_MIN 20
-#define TILT_MAX 165
-#define PAN_MID 100 /*90*/
-#define TILT_MID 130
 
 // Servo positions for pan/tilt camera servos
 int panServo = PAN_MID;   // defaults to mid point
 int tiltServo = TILT_MID;  // defaults to mid point
-
 
 // Manual control settings - these get set by manual commands coming in through the FIFO.  Start them with sensible defaults.
 int manualPowerLeft = 0;
@@ -214,9 +167,9 @@ int manualServoTilt = TILT_MID;
 // Autonomous control or manual control?  This gets set to false when a manual command comes in through the FIFO
 bool autonomous = false;
 
-//char lightStatus[256];  // Hold the result of isdark calls - used only to output the light/dark status information
 float lightIntensity = 0.0;
 bool gaveGreetingToday = false;
+bool saidGoodnight = false;
 bool inTheDark = false;
 unsigned long timeInDark = 0;
 int darkCount = 0;
@@ -295,13 +248,13 @@ float pitchAngle = 0;
 
 float getHeading(float ax, float ay, float az, float mx, float my, float mz, float gx, float gy, float gz, int offset, int n)
 {
-   static float rate_gyr_x(0.0),rate_gyr_y(0.0),rate_gyr_z(0.0);
-   static float gyroXangle(0.0),gyroYangle(0.0),gyroZangle(0.0);
+    static float rate_gyr_x(0.0),rate_gyr_y(0.0),rate_gyr_z(0.0);
+    static float gyroXangle(0.0),gyroYangle(0.0),gyroZangle(0.0);
 
 //   static float AccYangle(0.0),AccXangle(0.0);
 
-   static float CFangleX = 0.0;
-   static float CFangleY = 0.0;
+    static float CFangleX = 0.0;
+    static float CFangleY = 0.0;
 
 
 
@@ -315,66 +268,66 @@ float getHeading(float ax, float ay, float az, float mx, float my, float mz, flo
 
 
 
-  float const PI_F = 3.14159265F;
+    float const PI_F = 3.14159265F;
 
-  /* roll: Rotation around the X-axis. -180 <= roll <= 180                                          */
-  /* a positive roll angle is defined to be a clockwise rotation about the positive X-axis          */
-  /*                                                                                                */
-  /*                    y                                                                           */
-  /*      roll = atan2(---)                                                                         */
-  /*                    z                                                                           */
-  /*                                                                                                */
-  /* where:  y, z are returned value from accelerometer sensor                                      */
-  float roll = (float)atan2(ay, az);
-  float pitch;
+    /* roll: Rotation around the X-axis. -180 <= roll <= 180                                          */
+    /* a positive roll angle is defined to be a clockwise rotation about the positive X-axis          */
+    /*                                                                                                */
+    /*                    y                                                                           */
+    /*      roll = atan2(---)                                                                         */
+    /*                    z                                                                           */
+    /*                                                                                                */
+    /* where:  y, z are returned value from accelerometer sensor                                      */
+    float roll = (float)atan2(ay, az);
 
 
-  /* pitch: Rotation around the Y-axis. -180 <= roll <= 180                                         */
-  /* a positive pitch angle is defined to be a clockwise rotation about the positive Y-axis         */
-  /*                                                                                                */
-  /*                                 -x                                                             */
-  /*      pitch = atan(-------------------------------)                                             */
-  /*                    y * sin(roll) + z * cos(roll)                                               */
-  /*                                                                                                */
-  /* where:  x, y, z are returned value from accelerometer sensor                                   */
-  if (ay * sin(roll) + az * cos(roll) == 0)
-    pitch = ax > 0 ? (PI_F / 2) : (-PI_F / 2);
-  else
-    pitch = (float)atan(-ax / (ay * sin(roll) + az * cos(roll)));
+    /* pitch: Rotation around the Y-axis. -180 <= pitch <= 180                                        */
+    /* a positive pitch angle is defined to be a clockwise rotation about the positive Y-axis         */
+    /*                                                                                                */
+    /*                                 -x                                                             */
+    /*      pitch = atan(-------------------------------)                                             */
+    /*                    y * sin(roll) + z * cos(roll)                                               */
+    /*                                                                                                */
+    /* where:  x, y, z are returned values from accelerometer sensor                                  */
+    float pitch;
+    if (ay * sin(roll) + az * cos(roll) == 0)
+	pitch = ax > 0 ? (PI_F / 2) : (-PI_F / 2);
+    else
+	pitch = (float)atan(-ax / (ay * sin(roll) + az * cos(roll)));
 
 
 //  pitch = -pitch;
-  roll = -roll;  //Move this up above the pitch calculation?
+    roll = -roll;  //Move this up above the pitch calculation?
 
-      //Convert Gyro raw to degrees per second
-      rate_gyr_x = (float)gx * G_GAIN;
-      rate_gyr_y = (float)gy * G_GAIN;
-      rate_gyr_z = (float)gz * G_GAIN;
+    // Convert Gyro raw to degrees per second
+    rate_gyr_x = (float)gx * G_GAIN;
+    rate_gyr_y = (float)gy * G_GAIN;
+    rate_gyr_z = (float)gz * G_GAIN;
 
-      //Calculate the angles from the gyro
-      gyroXangle += rate_gyr_x*DT;
-      gyroYangle += rate_gyr_y*DT;
-      gyroZangle += rate_gyr_z*DT;
-      CFangleX=AA*(CFangleX+rate_gyr_x*DT) +(1 - AA) * (roll * 180 / 3.14159265);
-      CFangleY=AA*(CFangleY+rate_gyr_y*DT) +(1 - AA) * (pitch * 180 / 3.14159265);
+    //Calculate the angles from the gyro
+    gyroXangle += rate_gyr_x*DT;
+    gyroYangle += rate_gyr_y*DT;
+    gyroZangle += rate_gyr_z*DT;
+    CFangleX=AA*(CFangleX+rate_gyr_x*DT) +(1 - AA) * (roll * 180 / 3.14159265);
+    CFangleY=AA*(CFangleY+rate_gyr_y*DT) +(1 - AA) * (pitch * 180 / 3.14159265);
 
 
-      float CFangleXRad = CFangleX * 3.14159265 / 180;
-      float CFangleYRad = CFangleY * 3.14159265 / 180;
-  /* heading: Rotation around the Z-axis. -180 <= roll <= 180                                       */
-  /* a positive heading angle is defined to be a clockwise rotation about the positive Z-axis       */
-  /*                                                                                                */
-  /*                                       z * sin(roll) - y * cos(roll)                            */
-  /*   heading = atan2(--------------------------------------------------------------------------)  */
-  /*                    x * cos(pitch) + y * sin(pitch) * sin(roll) + z * sin(pitch) * cos(roll))   */
-  /*                                                                                                */
-  /* where:  x, y, z are returned value from magnetometer sensor                                    */
+    float CFangleXRad = CFangleX * 3.14159265 / 180;
+    float CFangleYRad = CFangleY * 3.14159265 / 180;
+    /* heading: Rotation around the Z-axis. -180 <= roll <= 180                                       */
+    /* a positive heading angle is defined to be a clockwise rotation about the positive Z-axis       */
+    /*                                                                                                */
+    /*                                       z * sin(roll) - y * cos(roll)                            */
+    /*   heading = atan2(--------------------------------------------------------------------------)  */
+    /*                    x * cos(pitch) + y * sin(pitch) * sin(roll) + z * sin(pitch) * cos(roll))   */
+    /*                                                                                                */
+    /* where:  x, y, z are returned value from magnetometer sensor                                    */
 
 //  float heading = (float)atan2(mz * sin(roll) - my * cos(roll),
 //                                      mx * cos(pitch) +
 //                                      my * sin(pitch) * sin(roll) +
 //                                      mz * sin(pitch) * cos(roll));
-  float heading = (float)atan2(mz * sin(CFangleXRad) - my * cos(CFangleXRad), \
+    float heading = (float)atan2(mz * sin(CFangleXRad) - my * cos(CFangleXRad), \
                                       mx * cos(CFangleYRad) + \
                                       my * sin(CFangleYRad) * sin(CFangleXRad) + \
                                       mz * sin(CFangleYRad) * cos(CFangleXRad));
@@ -385,19 +338,19 @@ float getHeading(float ax, float ay, float az, float mx, float my, float mz, flo
     heading += declinationAngle;
 
 
-  /* Convert angular heading to degrees */
-  roll = roll * 180 / PI_F;
-  pitch = pitch * 180 / PI_F;
-  heading = heading * 180 / PI_F;
+    /* Convert angular heading to degrees */
+    roll = roll * 180 / PI_F;
+    pitch = pitch * 180 / PI_F;
+    heading = heading * 180 / PI_F;
 
-   // Compensate for the sensor being rotated with respect to the device.  Caller specified by how much.
-  heading += offset;
+    // Compensate for the sensor being rotated with respect to the device.  Caller specified by how much.
+    heading += offset;
 
 
     // Convert to range (0, 360)
     heading = (heading > 0.0 ? heading : (360.0 + heading));
 
-  return heading;
+    return heading;
 }
 
 
@@ -825,22 +778,25 @@ void ManualControl(ControlMode *manualControl)
     {
         char *panVal = strtok(val, ",");
         char *tiltVal = strtok(0, ",");
-        panServo = strtol(panVal, 0, 10);
-        if (panServo < PAN_MIN)
-            panServo = PAN_MIN;
-        if (panServo > PAN_MAX)
-            panServo = PAN_MAX;
+        long panServoVal = strtol(panVal, 0, 10);
+        if (panServoVal < PAN_MIN)
+            panServoVal = PAN_MIN;
+        if (panServoVal > PAN_MAX)
+            panServoVal = PAN_MAX;
 
-        tiltServo = 180 - strtol(tiltVal, 0, 10);
-        if (tiltServo < TILT_MIN)
-            tiltServo = TILT_MIN;
-        if (tiltServo > TILT_MAX)
-            tiltServo = TILT_MAX;
+        long tiltServoVal = 180 - strtol(tiltVal, 0, 10);
+        if (tiltServoVal < TILT_MIN)
+            tiltServoVal = TILT_MIN;
+        if (tiltServoVal > TILT_MAX)
+            tiltServoVal = TILT_MAX;
 
-        manualServoPan = panServo;
-        manualServoTilt = tiltServo;
-        SetServoAngle(PAN_SERVO, panServo);
-        SetServoAngle(TILT_SERVO, tiltServo);
+        manualServoPan = panServoVal;
+        manualServoTilt = tiltServoVal;
+	panServo = panServoVal;
+	tiltServo = tiltServoVal;
+        SetServoAngle(PAN_SERVO, panServoVal);
+        SetServoAngle(TILT_SERVO, tiltServoVal);
+//	panTiltTo(panServoVal, tiltServoVal);
     }
     else if (!strcmp(msgType, "H"))
     {
@@ -1460,6 +1416,51 @@ void ReadWaypointsFile()
 
 void speak(const char *str)
 {
+#ifdef JUNK
+    pid_t pid;
+    int cp[2];
+
+    /* Make pipe */
+    if( pipe(cp) < 0)
+    {
+        perror("Can't make pipe");
+        exit(1);
+    }
+
+
+    /* Create a child to run command. */
+    if (fork() == 0)
+    {
+        // Child
+        close(1); // Close current stdout.
+        dup( cp[1]); // Make stdout go to write end of pipe.
+        close( cp[0]); // Close read end of pipe
+        execlp("espeak", "espeak", "--stdout", "-s", "110", str, NULL);
+        perror("Can't exec");
+        exit(1);
+    }
+    else
+    {
+        // Parent
+        if ((pid = fork()) == 0)
+        {
+            // Child
+            close(0);
+            dup(cp[0]);
+            close(cp[1]);
+            execlp("aplay", "aplay", NULL);
+            perror("Can't exec");
+            exit(1);
+        }
+        else
+        {
+            // Parent
+            int status;
+            waitpid(pid, &status, 0);
+        }
+    }
+#endif
+
     pid_t child_PID;
     child_PID = fork();
     if(child_PID >= 0)
@@ -1493,7 +1494,16 @@ float getLightLevel()
 {
     FILE *fp = popen("./intensity /var/www/cam.jpg", "r");
     if (fp == NULL)
-	return 0.0;
+    {
+	// If the popen failed for some reason, wait a hundred milliseconds and try again - it
+	// probably failed because the raspimjpeg program was in the middle of creating it.
+	// Log soemthing anyway so we have some hope of seeing what happened.
+	printf("popen(./intensity /var/www/cam.jpg failed: %d", errno);
+        usleep(100000);
+        fp = popen("./intensity /var/www/cam.jpg", "r");
+        if (fp == NULL)
+	    return 0.0;
+    }
 
     char result[256];
 
@@ -1597,18 +1607,15 @@ float getLightLevel()
 #endif
 }
 
-void giveGreeting()
+void panTiltTo(long pan, long tilt)
 {
-    // Turn toward the kitchen
-    int savedPan = panServo;
-    int savedTilt = tiltServo;
-    int panInterval = panServo < 43 ? 1 : -1;
-    int tiltInterval = tiltServo < 120 ? 1 : -1;
-    while (panServo != 43 || tiltServo != 120)
+    int panInterval = panServo < pan ? 1 : -1;
+    int tiltInterval = tiltServo < tilt ? 1 : -1;
+    while (panServo != pan || tiltServo != tilt)
     {
-	if (panServo == 43)
+	if (panServo == pan)
 	    panInterval = 0;
-	if (tiltServo == 120)
+	if (tiltServo == tilt)
 	    tiltInterval = 0;
 
         panServo += panInterval;
@@ -1621,15 +1628,23 @@ void giveGreeting()
 
 	// Safety measures - this should never happen.  If any of these conditions are met, something has gone wrong.
 	// Break out of the loop so we don't burn up the servos
-	if (panInterval == -1 && panServo < 30)
+	if (panInterval == -1 && panServo < 10)
 	    break;
-	if (panInterval == 1 && panServo > 50)
+	if (panInterval == 1 && panServo > 160)
 	    break;
-	if (tiltInterval == -1 && tiltServo < 110)
+	if (tiltInterval == -1 && tiltServo < 20)
 	    break;
-	if (tiltInterval == 1 && tiltServo > 130)
+	if (tiltInterval == 1 && tiltServo > 160)
 	    break;
     }
+}
+
+void giveGreeting()
+{
+    // Turn toward the kitchen
+    int savedPan = panServo;
+    int savedTilt = tiltServo;
+    panTiltTo(43, 120);
 
     // Get the weather
     FILE *fp = popen("./weather", "r");
@@ -1643,12 +1658,12 @@ void giveGreeting()
 
     char greeting[256];
     strcpy(greeting, "Good morning.");
-    if (0)//strlen(weather))
-    {
-	strcat(greeting,"  Today's weather will be ");
-	strcat(greeting, weather);
-    }
 
+    speak(greeting);
+
+    sleep(1);
+    strcpy(greeting, "Today's weather will be ");
+    strcat(greeting, weather);
     speak(greeting);
 
     sleep(5);
@@ -1662,7 +1677,6 @@ static void *GreetingThread(void *)
 {
     // Once a day - as soon as the lights go on after being in the dark all night - greet me with a "good morning" and
     // the day's weather report.
-
     while (1)
     {
 	time_t now = time(0);
@@ -1671,6 +1685,7 @@ static void *GreetingThread(void *)
 	{
 	    // It's after midnight - a new day, so reset the gaveGreeting flag
 	    gaveGreetingToday = false;
+	    saidGoodnight = false;
 	}
 	if (getLightLevel() < 30)
 	{
@@ -1684,6 +1699,13 @@ static void *GreetingThread(void *)
 		    inTheDark = true;
 		    darkCount = 0;
 		    timeInDark = millis();
+
+		    // It's dark, it's after 10 PM, and we haven't said goodnight yet.  Say goodnight.
+		    if (!saidGoodnight && time_tm->tm_hour > 22)
+		    {
+			speak("Goodnight.");
+			saidGoodnight = true;
+		    }
 		}
 	    }
 	}
