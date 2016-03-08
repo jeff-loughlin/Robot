@@ -15,7 +15,7 @@ TARGET = robot
 all: $(TARGET) ctrl
 
 $(TARGET): $(OBJS)
-	$(CPP) -g -lm -lusb-1.0 -lc -lgps -pthread -o $@ $^
+	$(CPP) -g -lm -lusb-1.0 -lc -lgps -lRTIMULib -pthread -o $@ $^
 
 %.o : %.cpp include.h
 	$(CPP) $(CFLAGS) -o $@ -c $<
