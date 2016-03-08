@@ -53,7 +53,7 @@ void parse_object(json_object *obj)
 	    {
 		const char *str = json_object_get_string(val);
 		strcpy(conditions, str);
-		printf("%s with a high temperature of %d\n", str, high);// and a low of %d\n", str, high, low);
+		printf("%s with a high of %d\n", str, high);// and a low of %d\n", str, high, low);
 		exit(0);
 	    }
 	    if (strcmp(key, "date") == 0 && !flag_show_all)
