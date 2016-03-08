@@ -1661,8 +1661,7 @@ void giveGreeting()
 
     speak(greeting);
 
-    sleep(1);
-    strcpy(greeting, "Today's weather will be ");
+    strcpy(greeting, "Todays weather will be ");
     strcat(greeting, weather);
     speak(greeting);
 
