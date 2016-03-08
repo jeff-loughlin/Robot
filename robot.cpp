@@ -1171,7 +1171,7 @@ static void *GpsThread(void *)
 void *IMUThread(void *)
 {
     int sampleCount = 0;
-    int sampleRate = 0;
+//    int sampleRate = 0;
     uint64_t rateTimer;
     uint64_t displayTimer;
     uint64_t now;
@@ -1253,7 +1253,7 @@ void *IMUThread(void *)
 
 	    if ((now - rateTimer) > 1000000)
 	    {
-		sampleRate = sampleCount;
+//		sampleRate = sampleCount;
 		sampleCount = 0;
 		rateTimer = now;
 	    }
