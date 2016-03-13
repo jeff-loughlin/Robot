@@ -1210,12 +1210,16 @@ void *IMUThread(void *)
 
     //  now just process data
 
+    long impactTimer = millis();
+    double prevGx = 0;
+    double prevGy = 0;
+    double prevGz = 0;
     while (1)
     {
 	//  poll at the rate recommended by the IMU
 
-	usleep(imu->IMUGetPollInterval() * 1000);
-
+//	usleep(imu->IMUGetPollInterval() * 1000);
+	usleep(100000);
 	while (imu->IMURead())
 	{
 	    RTIMU_DATA imuData = imu->getIMUData();
@@ -1230,7 +1234,7 @@ void *IMUThread(void *)
 //		printf("Sample rate %d: %s\r", sampleRate, RTMath::displayDegrees("", imuData.fusionPose));
 		fflush(stdout);
 		displayTimer = now;
-		rollAngle = imuData.fusionPose.x() * (180 / M_PI) - 180;  // Upside-down
+		rollAngle = imuData.fusionPose.x() * (180 / M_PI);
 		pitchAngle = imuData.fusionPose.y() * (180 / M_PI);
 		heading = imuData.fusionPose.z() * (180 / M_PI);
 
@@ -1257,6 +1261,38 @@ void *IMUThread(void *)
 		sampleCount = 0;
 		rateTimer = now;
 	    }
+
+	    // Detect impacts
+	    const float ouchThreshold = 10.0;
+	    if (ouchEnabled && (fabs(gyroX) > ouchThreshold || fabs(gyroY) > ouchThreshold || fabs(gyroZ) > ouchThreshold)
+			&& (fabs(prevGx) > ouchThreshold || fabs(prevGy) > ouchThreshold || fabs(prevGz) > ouchThreshold))
+	    {
+		// Only if it's been more than 1 second since the last impact, and we're not currently moving
+		if (millis() - impactTimer > 1000 && leftMotorPower == 0 && rightMotorPower == 0)
+		{
+		    pid_t child_PID;
+		    child_PID = fork();
+		    if(child_PID >= 0)
+		    {
+			if(child_PID == 0)
+			{
+			    // Child process
+			    printf("Child process! PID=%d, Parent PID=%d\n", getpid(), getppid());
+			    execl("/usr/bin/espeak", "/usr/bin/espeak", "Ouch.", (char *)0);
+			    _exit(0);
+			}
+			else
+			{
+			    int status;
+			    waitpid(child_PID, &status, 0);
+			}
+		    }
+		    impactTimer = millis();
+		}
+	    }
+	    prevGx = gyroX;
+	    prevGy = gyroY;
+	    prevGz = gyroZ;
 	}
     }
 }
@@ -1787,16 +1823,16 @@ static void *GreetingThread(void *)
 		// It's dark now, and it wasn't dark the last time through the loop.  If we're still in the dark after 5
 		//  iterations, we're in the dark and staying that way
 		darkCount++;
-		if (darkCount == 5)
+		if (darkCount == 2)
 		{
 		    inTheDark = true;
 		    darkCount = 0;
 		    timeInDark = millis();
 
 		    // It's dark, it's after 10 PM, and we haven't said goodnight yet.  Say goodnight.
-		    if (!saidGoodnight && time_tm->tm_hour > 22)
+		    if (!saidGoodnight && time_tm->tm_hour >= 22)
 		    {
-			speak("Goodnight.");
+			speak("Good night.");
 			saidGoodnight = true;
 		    }
 		}
