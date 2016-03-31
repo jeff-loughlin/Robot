@@ -31,6 +31,10 @@ float AA = 0.98; // complementary filter constant
 const int CAL_SAMPLES = 10;
 
 
+const float rollOffset = -1.75;
+const float pitchOffset = -4.81;
+
+
 // Mag calibration constants
 // xmin: -216      xmax: 620       ymin: -476      ymax: 320      zmin: -710       zmax: -436
 
@@ -135,15 +139,22 @@ Kalman xFilter(0.125, 4, 1, 0);
 Kalman yFilter(0.125, 4, 1, 0);
 Kalman zFilter(0.125, 4, 1, 0);
 
-Kalman xAccFilter(0.125, 4, 1, 0);
-Kalman yAccFilter(0.125, 4, 1, 0);
-Kalman zAccFilter(0.125, 4, 1, 0);
+Kalman xAccelFilter(0.125, 4, 1, 0);
+Kalman yAccelFilter(0.125, 4, 1, 0);
+Kalman zAccelFilter(0.125, 4, 1, 0);
 
+Kalman xGyroFilter(0.125, 4, 1, 0);
+Kalman yGyroFilter(0.125, 4, 1, 0);
+Kalman zGyroFilter(0.125, 4, 1, 0);
 
+Kalman rollFilter(0.125, 4, 1, 0);
+Kalman pitchFilter(0.125, 4, 1, 0);
+
+//int rotationDegrees = 0;
 
 // PID controller variables for heading
-double SetHeading, headingPIDInput, headingPIDOutput;
-PID headingPID(&headingPIDInput, &headingPIDOutput, &SetHeading,1,0,0, DIRECT);
+double targetHeading, headingPIDInput, headingPIDOutput;
+PID headingPID(&headingPIDInput, &headingPIDOutput, &targetHeading,1,0,0, DIRECT);
 
 // PID controller variables for wall follower (distance from wall)
 double SetDistance, wallPIDInput, wallPIDOutput;
@@ -167,12 +178,23 @@ int manualServoTilt = TILT_MID;
 // Autonomous control or manual control?  This gets set to false when a manual command comes in through the FIFO
 bool autonomous = false;
 
+// Wall-follower modes
+bool leftWallFollowMode = false;
+bool rightWallFollowMode = false;
+
+bool steerToHeadingMode = false;
+
+// Stuff for managing the greeting and detecting lights on / lights off
 float lightIntensity = 0.0;
 bool gaveGreetingToday = false;
 bool saidGoodnight = false;
 bool inTheDark = false;
 unsigned long timeInDark = 0;
 int darkCount = 0;
+
+
+
+
 
 // Quick and dirty function to get elapsed time in milliseconds.  This will wrap at 32 bits (unsigned long), so
 // it's not an absolute time-since-boot indication.  It is useful for measuring short time intervals in constructs such
@@ -494,7 +516,7 @@ void SetServoAngle(int servo, int angle)
 float prevHeading = 0;
 
 // Steer to heading subsumption task.  If active and not subsumed by a higher priority task, this will set the motor speeds
-// to steer to the given heading (SetHeading)
+// to steer to the given heading (targetHeading)
 void SteerToHeading(ControlMode *steerToHeadingControl)
 {
     // Filter the mag data to eliminate noise
@@ -517,7 +539,7 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
     float adjustedHeading = filteredHeading;
 
     // Deal with the 0 == 360 problem
-    float diff = SetHeading - filteredHeading;
+    float diff = targetHeading - filteredHeading;
     if (diff > 180)
 	adjustedHeading += 360;
     else if (diff < -180)
@@ -532,9 +554,9 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
 	headingFilter.reset(0.125, 4, 1, 360);
     prevHeading = filteredHeading;
 
-//   if (SetHeading - filteredHeading > 180)
+//   if (targetHeading - filteredHeading > 180)
 //       filteredHeading += 360;
-//   else if (SetHeading - filteredHeading < -180)
+//   else if (targetHeading - filteredHeading < -180)
 //       filteredHeading -= 360;
 
     headingFilter.update(filteredHeading);
@@ -542,23 +564,25 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
     headingPIDInput = adjustedHeading;//filteredHeading;  // adjustedHeading ?
     headingPID.Compute();
 
-    printf("Roll Angle: %3.2f\n", rollAngle);
-    printf("PitchAngle: %3.2f\n", pitchAngle);
+    printf("\033[2J");
+    printf("\033[H");
+    printf("Roll Angle:  %c%3.1f degrees\n", rollAngle + rollOffset < 0 ? '\0' : ' ', rollAngle + rollOffset);
+    printf("Pitch Angle: %c%3.1f degrees\n", pitchAngle + pitchOffset < 0 ? '\0' : ' ', pitchAngle + pitchOffset);
     printf("Raw Heading:         %f\n", heading);
-    printf("\033[1mSet Heading:         %d\033[0m \n", (int)SetHeading);
     printf("\033[1mFiltered Heading:    %d\033[0m \n", (int)filteredHeading);
+    printf("\033[1mTarget Heading:      %d\033[0m \n", (int)targetHeading);
     printf("PID error:           %d\n", (int)headingPIDOutput);
-    fprintf(outFile, "Roll Angle: %3.2f\n", rollAngle);
-    fprintf(outFile, "PitchAngle: %3.2f\n", pitchAngle);
+    fprintf(outFile, "Roll Angle:  %c%3.1f degrees\n",  rollAngle + rollOffset < 0 ? '\0' : ' ', rollAngle + rollOffset);
+    fprintf(outFile, "Pitch Angle: %c%3.1f degrees\n",  pitchAngle + pitchOffset < 0 ? '\0' : ' ', pitchAngle + pitchOffset);
     fprintf(outFile, "Heading: %d\n", (int)filteredHeading);
-    fprintf(outFile, "Target Heading: %d\n", (int)SetHeading);
+    fprintf(outFile, "Target Heading: %d\n", (int)targetHeading);
     fprintf(outFile, "PID error:           %d\n", (int)headingPIDOutput);
 
 
     steerToHeadingControl->leftMotorPower = NORMAL_SPEED - headingPIDOutput;
     steerToHeadingControl->rightMotorPower = NORMAL_SPEED + headingPIDOutput;
 
-    steerToHeadingControl->active = true;
+    steerToHeadingControl->active = steerToHeadingMode;
 }
 
 
@@ -568,8 +592,18 @@ void WallFollower(ControlMode *wallFollowerControl)
 {
     wallPIDInput = distance1;
     wallFollowerPID.Compute();
-    wallFollowerControl->leftMotorPower = NORMAL_SPEED + wallPIDOutput;
-    wallFollowerControl->rightMotorPower = NORMAL_SPEED - wallPIDOutput;
+
+    if (leftWallFollowMode)
+    {
+	wallFollowerControl->leftMotorPower = NORMAL_SPEED + wallPIDOutput;
+	wallFollowerControl->rightMotorPower = NORMAL_SPEED - wallPIDOutput;
+    }
+    else if (rightWallFollowMode)
+    {
+	wallFollowerControl->leftMotorPower = NORMAL_SPEED - wallPIDOutput;
+	wallFollowerControl->rightMotorPower = NORMAL_SPEED + wallPIDOutput;
+    }
+    wallFollowerControl->active = leftWallFollowMode | rightWallFollowMode;
 }
 
 
@@ -583,14 +617,15 @@ void DetectObstacles(ControlMode *detectObstaclesControl)
     //
     // ...
     //
-    // Do something useful here (move servo, wait)
-
-    int distanceAhead = distance1;
-    if (distanceAhead > 4 && distanceAhead < 40 ) // cm
-    {
-        detectObstaclesControl->active = true;
-    }
-    else
+    // This doesn't do anything currently
+    // TODO:  Do something useful here
+    //
+//    int distanceAhead = distance1;
+//    if (distanceAhead > 4 && distanceAhead < 40 ) // cm
+//    {
+//        detectObstaclesControl->active = true;
+//    }
+//    else
         detectObstaclesControl->active = false;
 }
 
@@ -604,9 +639,9 @@ void CalculateHeadingToWaypoint()
     waypoint.latitude = waypoint.latitude * PI / 180.0;
     waypoint.longitude = waypoint.longitude * PI / 180.0;
 
-    // SetHeading is the value used by the heading PID controller.  By changing this, we change the heading
+    // targetHeading is the value used by the heading PID controller.  By changing this, we change the heading
     // to which the SteerToHeading subsumption task will try to steer us.
-    SetHeading = getBearing(current, waypoint);
+    targetHeading = getBearing(current, waypoint);
 
     return;
 }
@@ -620,7 +655,7 @@ void CalculateDistanceToWaypoint()
     waypoint.latitude = waypoint.latitude * PI / 180.0;
     waypoint.longitude = waypoint.longitude * PI / 180.0;
 
-    // SetHeading is the value used by the heading PID controller.  By changing this, we change the heading
+    // targetHeading is the value used by the heading PID controller.  By changing this, we change the heading
     // to which the SteerToHeading subsumption task will try to steer us.
     waypointRange = getDistance(current, waypoint);
 
@@ -742,7 +777,7 @@ void ManualControl(ControlMode *manualControl)
     int res = read(fdFifo, buf, 255);
     if (res <= 0)
     {
-        manualControl->active = !autonomous;
+        manualControl->active = !(autonomous | leftWallFollowMode | rightWallFollowMode);
         manualControl->leftMotorPower = manualPowerLeft;
         manualControl->rightMotorPower = manualPowerRight;
 //        CalculateGyroPID(manualControl);
@@ -767,12 +802,29 @@ void ManualControl(ControlMode *manualControl)
         if (panServo > PAN_MAX)
             panServo = PAN_MAX;
         autonomous = false;
+	leftWallFollowMode = false;
+	rightWallFollowMode = false;
     }
     else if (!strcmp(msgType, "A"))
     {
         manualPowerLeft = 0;
         manualPowerRight = 0;
         autonomous = true;
+    }
+    else if (!strcmp(msgType, "W"))
+    {
+	if (!strcmp(val, "L"))
+	{
+	    leftWallFollowMode = true;
+	    rightWallFollowMode = false;
+	    manualControl->active = false;
+	}
+	else if (!strcmp(val, "R"))
+	{
+	    leftWallFollowMode = false;
+	    rightWallFollowMode = true;
+	    manualControl->active = false;
+	}
     }
     else if (!strcmp(msgType, "PT"))
     {
@@ -800,7 +852,7 @@ void ManualControl(ControlMode *manualControl)
     }
     else if (!strcmp(msgType, "H"))
     {
-        SetHeading = strtof(val, 0);
+        targetHeading = strtof(val, 0);
         autonomous = true;
     }
     else if (!strcmp(msgType, "CAL"))
@@ -843,7 +895,15 @@ void ManualControl(ControlMode *manualControl)
     {
 	scanMode = strtol(val, 0, 10);
     }
-    manualControl->active = !autonomous;
+    else if (!strcmp(msgType, "ROT"))
+    {
+	autonomous = false;
+        int degrees = strtol(val, 0, 10);
+//	pthread_t rotThreadId;
+//	pthread_create(&rotThreadId, NULL, rotateDegreesThread, &rotationDegrees);
+	RotateDegrees(degrees);
+    }
+    manualControl->active = !(autonomous | leftWallFollowMode | rightWallFollowMode);
     manualControl->leftMotorPower = manualPowerLeft;
     manualControl->rightMotorPower = manualPowerRight;
 }
@@ -882,59 +942,31 @@ void ProcessSubsumptionTasks()
     }
     else
     {
+        printf("SteerToHeadingControl: Inactive\n");
         fprintf(outFile, "SteerToHeadingControl: Inactive\n");
     }
     if (wallFollowerControl.active)
     {
-        // See if we're heading back in the desired direction.  If we are, we've followed the wall
-        // or obstacle around to a point where we can now continue on our desired course.
-        if (fabs(SetHeading - heading) < 10)
-        {
-            wallFollowerControl.active = false;
-            fprintf(outFile, "WallFollowerControl: Inactive\n");
-        }
-        else
-        {
-            // Otherwise, keep following the wall or obstacle
-            leftMotorPower = wallFollowerControl.leftMotorPower;
-            rightMotorPower = wallFollowerControl.rightMotorPower;
-            printf("WallFollowerControl Active\n");
-            fprintf(outFile, "WallFollowerControl: Active\n");
-        }
+        leftMotorPower = wallFollowerControl.leftMotorPower;
+        rightMotorPower = wallFollowerControl.rightMotorPower;
+        printf("WallFollowerControl: Active\n");
+        fprintf(outFile, "WallFollowerControl: Active\n");
     }
-    if (0)//detectObstaclesControl.active)
+    else
     {
-        printf("Obstacle detected.\n");
-        fprintf(outFile, "Obstacle detected: true\n");
-
-        if (manualControl.active && !((manualControl.leftMotorPower > 0 && manualControl.rightMotorPower < 0) ||
-                                      (manualControl.leftMotorPower < 0 && manualControl.rightMotorPower > 0) ||
-                                      (manualControl.leftMotorPower < 0 && manualControl.rightMotorPower < 0)))
-        {
-            manualControl.leftMotorPower = 0;
-            manualControl.rightMotorPower = 0;
-        }
-        else
-        {
-            // TODO: Turn left or right, depending on where the obstacle was detected
-            SetMotorSpeed(LEFT_MOTOR, NORMAL_SPEED);
-            SetMotorSpeed(RIGHT_MOTOR, -NORMAL_SPEED);
-            sleep(2);
-            leftMotorPower = NORMAL_SPEED;
-            rightMotorPower = NORMAL_SPEED;
-            wallFollowerControl.active = true;
-        }
-        // TODO: Turn distance servo to 45 degrees (left or right, depending on where the obstacle was detected)
+        printf("WallFollowerControl: Inactive\n");
+        fprintf(outFile, "WallFollowerControl: Inactive\n");
     }
     if (manualControl.active)
     {
         leftMotorPower = manualControl.leftMotorPower;
         rightMotorPower = manualControl.rightMotorPower;
-        printf("ManualControl Active\n");
+        printf("ManualControl: Active\n");
         fprintf(outFile, "ManualControl: Active\n");
     }
     else
     {
+        printf("ManualControl: Inactive\n");
         fprintf(outFile, "ManualControl: Inactive\n");
     }
     if (catMode)
@@ -981,6 +1013,86 @@ void ProcessSubsumptionTasks()
     printf("RIGHT MOTOR: %d\n",rightMotorPower);
     fprintf(outFile, "LEFT MOTOR: %d\n",leftMotorPower);
     fprintf(outFile, "RIGHT MOTOR: %d\n",rightMotorPower);
+}
+
+
+static void *rotateDegreesThread(void *threadParam)
+{
+    // Make sure there's only one rotate thread running at a time.
+    // TODO: proper thread synchronization would be better here
+    static bool threadActive = false;
+    if (threadActive)
+	return 0;
+    threadActive = true;
+    
+    int degrees = *(int*)threadParam;
+    free(threadParam);  // Must have been malloc()'d by the caller of this thread routine!!
+
+    
+    int startHeading = headingFilter.GetValue();
+    int targetHeading = startHeading + degrees;
+    if (targetHeading < 0)
+	targetHeading += 360;
+    if (targetHeading > 359)
+	targetHeading -=360;
+
+    if (degrees < 0)
+    {
+	manualPowerLeft = 50;
+	manualPowerRight = -50;
+	SetMotorSpeed(LEFT_MOTOR, 50);
+	SetMotorSpeed(RIGHT_MOTOR, -50);
+    }
+    else
+    {
+	manualPowerLeft = -50;
+	manualPowerRight = 50;
+	SetMotorSpeed(LEFT_MOTOR, -50);
+	SetMotorSpeed(RIGHT_MOTOR, 50);
+    }
+
+    bool done = false;
+    double turn = 0.0;
+    do
+    {
+	// Use the Z gyro to integrate turn rate over time.  Stop turning when we've turned the target number of degrees.
+	turn += (zGyroFilter.GetValue() * gyroDeltaT / 1000);
+	if (abs(turn) > abs(degrees))
+	    done = true;
+	
+	// Backup method - use the magnetometer to see what direction we're facing.  Stop turning when we reach the target heading.
+	int currentHeading = (int)heading;//headingFilter.GetValue();
+//	printf("Rotating: currentHeading = %d   targetHeading = %d\n", currentHeading, targetHeading);
+	if ((currentHeading >= targetHeading) && (degrees > 0) && (startHeading < targetHeading))
+	{
+	    done = true;
+	}
+	if ((currentHeading <= targetHeading) && (degrees < 0) && (startHeading > targetHeading))
+	{
+	    done = true;
+	}
+	if (currentHeading < startHeading && degrees > 0)
+	    startHeading = currentHeading;
+	if (currentHeading > startHeading && degrees < 0)
+	    startHeading = currentHeading;
+	usleep(100000);
+    }
+    while (!done);
+    manualPowerLeft = 0;
+    manualPowerRight = 0;
+    SetMotorSpeed(LEFT_MOTOR, 0);
+    SetMotorSpeed(RIGHT_MOTOR, 0);
+
+    threadActive = false;
+    return 0;
+}
+
+static void RotateDegrees(int degrees)
+{
+    int *rotationDegrees = (int *)malloc(sizeof(int));
+    *rotationDegrees = degrees;
+    pthread_t rotThreadId;
+    pthread_create(&rotThreadId, NULL, rotateDegreesThread, rotationDegrees);
 }
 
 
@@ -1214,6 +1326,7 @@ void *IMUThread(void *)
     double prevGx = 0;
     double prevGy = 0;
     double prevGz = 0;
+    long lastMillis = millis();
     while (1)
     {
 	//  poll at the rate recommended by the IMU
@@ -1247,10 +1360,30 @@ void *IMUThread(void *)
 		accelX = imuData.accel.x() * 10;   // m/s^2
 		accelY = imuData.accel.y() * 10;   // m/s^2
 		accelZ = imuData.accel.z() * 10;   // m/s^2
-		gyroX = imuData.gyro.x() * 100;
-		gyroY = imuData.gyro.y() * 100;
-		gyroZ = imuData.gyro.z() * 100;
+		xAccelFilter.update(accelX);
+		yAccelFilter.update(accelY);
+		zAccelFilter.update(accelZ);
+		accelX = xAccelFilter.GetValue();
+	        accelY = yAccelFilter.GetValue();
+		accelZ = zAccelFilter.GetValue();
+
+		gyroX = imuData.gyro.x() * 100;  // degrees / sec
+		gyroY = imuData.gyro.y() * 100;  // degrees / sec
+		gyroZ = imuData.gyro.z() * 100;  // degrees / sec
+		xGyroFilter.update(gyroX);
+		yGyroFilter.update(gyroY);
+		zGyroFilter.update(gyroZ);
+//		gyroX = xGyroFilter.GetValue();
+//		gyroY = yGyroFilter.GetValue();
+//		gyroZ = zGyroFilter.GetValue();
+
+		rollFilter.update(rollAngle);
+		pitchFilter.update(pitchAngle);
+		rollAngle = rollFilter.GetValue();
+		pitchAngle = pitchFilter.GetValue();
 		
+		gyroDeltaT = millis() - lastMillis;
+		lastMillis = millis();
 	    }
 
 	    //  update rate every second
@@ -1263,7 +1396,7 @@ void *IMUThread(void *)
 	    }
 
 	    // Detect impacts
-	    const float ouchThreshold = 10.0;
+	    const float ouchThreshold = 15.0;
 	    if (ouchEnabled && (fabs(gyroX) > ouchThreshold || fabs(gyroY) > ouchThreshold || fabs(gyroZ) > ouchThreshold)
 			&& (fabs(prevGx) > ouchThreshold || fabs(prevGy) > ouchThreshold || fabs(prevGz) > ouchThreshold))
 	    {
@@ -1599,7 +1732,8 @@ void speak(const char *str)
 	{
 	    // Child process
 //	    printf("Child process! PID=%d, Parent PID=%d\n", getpid(), getppid());
-    	    execl("/usr/bin/espeak", "/usr/bin/espeak", "-s 110", str, (char *)0);
+//    	    execl("/usr/bin/espeak", "/usr/bin/espeak", "-s 110", str, (char *)0);
+	    execl("./speak.sh","./speak.sh", str, (char *)0);
 	    _exit(0);
 	}
 	else
@@ -1884,7 +2018,7 @@ int main(int argc, char **argv)
                 break;
             case 'h':
                 headingFlag = 1;
-                SetHeading = strtol(optarg, 0, 10);
+                targetHeading = strtol(optarg, 0, 10);
                 waypointFlag = 0;
                 break;
             case 'w':
@@ -1975,20 +2109,20 @@ int main(int argc, char **argv)
             outFile = fopen("./data.log", "w");
             ProcessSubsumptionTasks();
 
-	    printf("Complex Heading: %3.2f\n", complexHeading);
+//	    printf("Complex Heading: %3.2f\n", complexHeading);
 	    printf("Waypoint Range: %1.1fm\n", waypointRange * 1000);
             printf("Pan Servo: %d\n", panServo);
             printf("Tilt Servo: %d\n", tiltServo);
             printf("MagX: %d\n", magX);
             printf("MagY: %d\n", magY);
             printf("MagZ: %d\n", magZ);
-            printf("AccelX: %f\n", accelX);
-            printf("AccelY: %f\n", accelY);
-            printf("AccelZ: %f\n", accelZ);
-            printf("GyroX: %f\n", gyroX);
-            printf("GyroY: %f\n", gyroY);
-            printf("GyroZ: %f\n", gyroZ);
-            printf("gyroDeltaT: %d\n", gyroDeltaT);
+            printf("AccelX: %c%2.2f m/sec^2\n", accelX >= 0 ? ' ' : '\0', accelX);
+            printf("AccelY: %c%2.2f m/sec^2\n", accelY >= 0 ? ' ' : '\0', accelY);
+            printf("AccelZ: %c%2.2f m/sec^2\n", accelZ < 10 ? ' ' : '\0', accelZ);
+            printf("GyroX: %c%3.2f deg/sec\n", xGyroFilter.GetValue() >= 0 ? ' ' : '\0', xGyroFilter.GetValue());
+            printf("GyroY: %c%3.2f deg/sec\n", yGyroFilter.GetValue() >= 0 ? ' ' : '\0', yGyroFilter.GetValue());
+            printf("GyroZ: %c%3.2f deg/sec\n", zGyroFilter.GetValue() >= 0 ? ' ' : '\0', zGyroFilter.GetValue());
+            printf("gyroDeltaT: %dms\n", gyroDeltaT);
 	    char gps_fix_mode[32];
 	    switch (gps_fix)
 	    {
@@ -2008,18 +2142,18 @@ int main(int argc, char **argv)
  	    }
 	    printf("GPS STATUS: %s\n", gps_status);
 	    printf("    Fix Mode: %s\n", gps_fix_mode);
-            printf("    Latitude: %f\n", latitude);
+            printf("    Latitude:   %f\n", latitude);
             printf("    Longitude: %f\n", longitude);
-	    printf("    Latitude Accuracy: %dm\n", (int)latitude_error);
+	    printf("    Latitude Accuracy:  %dm\n", (int)latitude_error);
 	    printf("    Longitude Accuracy: %dm\n", (int)longitude_error);
             printf("Distance1: %d\n", distance1);
             printf("Distance2: %d\n", distance2);
             printf("Light Intensity: %3.2f\n", lightIntensity);
-            printf("LED: %s\n\n", led ? "ON" : "OFF");
-	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
-	    printf("Dark: %s\n", inTheDark?"true":"false");
-	    printf("Dark timer: %lu\n", timeInDark);
-	    printf("Dark Counter: %d\n", darkCount);
+            printf("LED: %s\n", led ? "ON" : "OFF");
+//	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
+//	    printf("Dark: %s\n", inTheDark?"true":"false");
+//	    printf("Dark timer: %lu\n", timeInDark);
+//	    printf("Dark Counter: %d\n", darkCount);
 
 	    fprintf(outFile, "Waypoint Range: %1.1fm\n", waypointRange * 1000);
             fprintf(outFile, "Pan Servo: %d\n", panServo);
@@ -2041,7 +2175,10 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "Latitude Accuracy: %dm\n", (int)latitude_error);
 	    fprintf(outFile, "Longitude accuracy: %dm\n", (int)longitude_error);
             fprintf(outFile, "Distance1: %d\n", distance1);
-            fprintf(outFile, "Distance2: %d\n", distance2);
+//            fprintf(outFile, "Distance2: %d\n", distance2);
+	    fprintf(outFile, "GyroX: %c%2.2f\n", xGyroFilter.GetValue() >= 0 ? ' ' : '\0', xGyroFilter.GetValue());
+	    fprintf(outFile, "GyroY: %c%2.2f\n", yGyroFilter.GetValue() >= 0 ? ' ' : '\0', yGyroFilter.GetValue());
+	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : '\0', zGyroFilter.GetValue());
 	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 
@@ -2092,5 +2229,65 @@ int main(int argc, char **argv)
     }
 }
 
+
+void *NavigateToLR(void *param)
+{
+    // Go forward until distance to front obstacle is 1m (couch)
+    autonomous = false;
+    manualPowerLeft = NORMAL_SPEED;
+    manualPowerRight = NORMAL_SPEED;
+    SetMotorSpeed(LEFT_MOTOR, manualPowerLeft);
+    SetMotorSpeed(RIGHT_MOTOR, manualPowerRight);
+    while (distance1 > 0 && distance1 < 100)
+    {
+	usleep(100000);
+    }
+    manualPowerLeft = 0;
+    manualPowerRight = 0;
+    SetMotorSpeed(LEFT_MOTOR, manualPowerLeft);
+    SetMotorSpeed(RIGHT_MOTOR, manualPowerRight);
+
+    
+    // Rotate 90 degrees left
+    RotateDegrees(-90);
+
+
+    // Go forward until distance to front obstacle is 20 cm (fridge)
+    manualPowerLeft = NORMAL_SPEED;
+    manualPowerRight = NORMAL_SPEED;
+    SetMotorSpeed(LEFT_MOTOR, manualPowerLeft);
+    SetMotorSpeed(RIGHT_MOTOR, manualPowerRight);
+    while (distance1 > 0 && distance1 < 100)
+    {
+	usleep(100000);
+    }
+    manualPowerLeft = 0;
+    manualPowerRight = 0;
+    SetMotorSpeed(LEFT_MOTOR, manualPowerLeft);
+    SetMotorSpeed(RIGHT_MOTOR, manualPowerRight);
+
+
+    // Rotate 30 degrees right
+    RotateDegrees(30);
+
+
+    // Enter Left Wall-following mode.  TODO:  Figure out how
+
+
+    // Monitor heading until we're facing 20 degrees (NNE) - then we know we're in the hallway.
+    while (heading > 20)
+    {
+	usleep(100000);
+    }
+
+
+    // Enter Right wall-following mode.  TODO: Figure out how
+
+
+
+    // TODO:  Figure out how to detect when we're in the LR
+    
+    return 0;
+}
 
 

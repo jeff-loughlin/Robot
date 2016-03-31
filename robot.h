@@ -52,4 +52,5 @@ public:
 
 
 void panTiltTo(long pan, long tilt);
+static void RotateDegrees(int degrees);
 
