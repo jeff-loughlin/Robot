@@ -5,7 +5,7 @@
 ?>
 <html>
 <head>
-
+    <link rel="stylesheet" type="text/css" href="css/flightindicators.css" />
     <script src="script-robot.js"></script>
 
   <style>
@@ -164,8 +164,14 @@ var motorControlActive = false;
 function motorMouseDown()
 {
     motorControlActive = true;
-    x = event.clientX - 266;
+//    x = event.clientX - 266;  // Swap L/R motors
+    x = 266 - event.clientX;
     y = 222 - event.clientY;
+
+    if (x > 128) x = 128;
+    if (x < -127) x = -127;
+    if (y > 128) y = 128;
+    if (y < -127) y = -127;
 //    document.getElementById('coords').innerHTML = "Motors: x=" + x + ", y=" + y;
     callPHP_motors('x=' + x + '&y=' + y);
 }
@@ -174,8 +180,13 @@ function motorMouseMove(event)
 {
     if (motorControlActive)
     {
-	x = event.clientX - 266;
+//	x = event.clientX - 266;  // Swap L/R motors
+	x = 266 - event.clientX;
 	y = 222 - event.clientY;
+	if (x > 128) x = 128;
+	if (x < -127) x = -127;
+	if (y > 128) y = 128;
+	if (y < -127) y = -127;
         callPHP_motors('x=' + x + '&y=' + y);
 
 //        document.getElementById('coords').innerHTML = 'Motors: x=' + x + ', y=' + y;
@@ -229,6 +240,8 @@ function releasePanTilt()
 
 </head>
 <body onload="initialize();">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+<script src="js/jquery.flightindicators.js"></script>
 <br/>
 
 <!-- Video control buttons -->
@@ -243,7 +256,7 @@ function releasePanTilt()
 
 <!-- Video feed -->
 <img style="position:absolute; top:30px; left:10px;" id="mjpeg_dest">
-<div style="position:absolute; top:415px; left:300px; z-index:1000">
+<div style="position:absolute; top:415px; left:325px; z-index:1000">
 White Balance:
 <select id="wbSelector" onclick="send_cmd('wb ' + this.value)">
 <?php
@@ -260,7 +273,15 @@ White Balance:
 </select><br/>
 Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="checkbox" onclick="if (this.checked) send_cmd('sa -100'); else send_cmd('sa 0');"/>
 </div>
-
+<div style="position:absolute;top:415px; left:210px; z-index:1000">
+<input type="button" onclick="showHideCompass()" value="Hide Compass" id="compassButton"/>
+</div>
+<div style="position:absolute;top:380px; left:15px; z-index:1000">
+<input type="image" onclick="rotateLeft()" src="left-arrow.png" id="rotateLeftImage" style="height:30px;width:30px" />
+</div>
+<div style="position:absolute;top:380px; left:485px; z-index:1000">
+<input type="image" onclick="rotateRight()" src="right-arrow.png" id="rotateRightImage" style="height:30px;width:30px" />
+</div>
 <!-- Pan/Tilt servo control element (crosshairs) -->
 <div style="position:absolute; top:30px; left:550px">
 <div id='pantiltPtr' style="top:92px; left:92px;" ></div>
@@ -277,16 +298,16 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <img onmousedown='motorMouseDown();' onmousemove='motorMouseMove(event);' onmouseup='motorMouseUp();' draggable="false" ondragstart="return false;" src="crosshairs-640x480.png" style="opacity:0.5; position:absolute; top:35px; left:15px; height:375px; width:500px"/>
 
 <!-- Telemetry data -->
-<div style="position:absolute; top:470px; left:10px; " id="data"></div>
+<div style="position:absolute; top:620px; left:10px; " id="data"></div>
 
 
 <!-- Misc informational text - motor command, download linkm mouse coords (for debugging), etc -->
 <div style="position:absolute; top: 400px; left:10px"><p><a href="vids.php">Download Videos and Images</a></p></div>
-<div style="position: absolute; top: 450px; left: 10px" id="coordsMotors">Motors Cmd:</div>
+<div style="position: absolute; top: 600px; left: 10px" id="coordsMotors">Motors Cmd:</div>
 <div style="position:absolute; left:550px; top:300px;" id="coords"></div>
 
 
-<!-- Cesium display for GPS and waypoint controlls -->
+<!-- Cesium display for GPS and waypoint controls -->
 <div style="position:absolute; top:30px; left:775px">
 <iframe id="cesiumFrame" width="525" height="380" src="cesium/Apps/position.html" onload="function() {this.contentWindow.location.reload(); this.onload = null;}"></iframe>
 </div>
@@ -300,9 +321,9 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 
 <!-- Telemetry data superimposed over the cesium display and video feed -->
 <div id="latLong" style="position:absolute; top:35px; left:785px; color:#ff0000"></div>
-<!-- <img id="headingArrow" src="north.png" style="position:absolute; top:35px; left: 20px; width:25px; height:25px"/> -->
 <img id="bearingArrow" src="pointer.png" style="position:absolute; top:35px; left: 20px; width:25px; height:25px"/>
 <div id="headingIndicator" style="position:absolute; top: 35px;left:20px; color:#ff0000"></div>
+
 
 <!-- Speak input box -->
 <div style="position:absolute; top:470px; left:420px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
@@ -315,19 +336,69 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 &nbsp;
 </div>
 
-<div style="position:absolute; top:600px; left:420px">
-<input id="laserButton" type="button" value="Laser On" onClick="laserButtonClicked()"/>
+
+<div style="position:absolute; top:620px; left:490px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+
+<table>
+  <tr>
+    <td><input id="laserButton" type="button" value="Laser On" onClick="laserButtonClicked()" style="width:150px"/></td>
+    <td><input id="catButton" type="button" value="Cat-toy Mode On" onClick="catButtonClicked()" style="width:150px"/></td>
+  </tr>
+
+  <tr>
+    <td><input id="scanButton" type="button" value="Scan Mode On" onClick="scanButtonClicked()" style="width:150px"/></td>
+    <td><input id="motionDetectButton" type="button" value="Motion Detection On" onClick="motionDetectButtonClicked()" style="width:150px"/></td>
+  </tr>
+
+  <tr>
+    <td><input id="leftWallButton" type="button" value="Wall Follow (Left)" onClick="leftWallButtonClicked()" style="width:150px"/></td>
+    <td><input id="rightButton" type="button" value="Wall Follow (Right)" onClick="rightWallButtonClicked()" style="width:150px"/></td>
+  </tr>
+
+  <tr>
+    <td><input id="meowButton" type="button" value="Meow" onClick="meowButtonClicked()" style="width:150px"/></td>
+    <td><input id="barkButton" type="button" value="Bark" onClick="barkButtonClicked()" style="width:150px"/></td>
+  </tr>
+</table>
 </div>
 
-<div style="position:absolute; top:630px; left:420px">
-<input id="catButton" type="button" value="Cat-toy Mode On" onClick="catButtonClicked()"/>
+<div style="position:absolute; top:770px; left:500px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<table>
+<tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16.0" high="15.0" low="11.0" optimum="13.0"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
+<tr><td align="right">Secondary Bus Voltage:</td><td><meter id="voltageMeter2" value="5" min="0" max="16.0" high="7.0" low="3.0"optimum="5.0"></meter></td><td align="right"><span id="voltageText2">5.0V</span></td></tr>
+</table>
 </div>
 
-<div style="position:absolute; top:660px; left:420px">
-<input id="scanButton" type="button" value="Scan Mode On" onClick="scanButtonClicked()"/>
+<div id="debug" style="position:absolute; top:420px; left:525px;"></div>
+
+<!-- Battery and attitude indicators -->
+<div style="position:absolute; top:300px; left:525px;">
+<span id="attitude"></span>
+<span id="battery"></span>
 </div>
 
-<div id="debug" style="position:absolute; top:300px; left:525px;"></div>
+
+<!-- Gyro meters -->
+<div style="width:70px; height:120px; position:absolute; top:470px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; text-align:center;">Gyros</div>
+<span style="position:absolute; left:-25px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroXMeter" value="0" min="0.0" max="20.0" high="10" optimum="0"></span>
+<span style="position:absolute; left:-5px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroYMeter" value="0" min="0.0" max="20.0" high="10" optimum="0"></span>
+<span style="position:absolute; left:15px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroZMeter" value="0" min="0.0" max="20.0" high="10" optimum="0"></span>
+<span style="position:absolute; left:12px; top:100px">x</span>
+<span style="position:absolute; left:32px; top:100px">y</span>
+<span style="position:absolute; left:52px; top:100px">z</span>
+</div>
+
+<!-- Motor meters -->
+<div style="width:70px; height:120px; position:absolute; top:470px; left:150px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; text-align:center;">Motors</div>
+<span style="position:absolute; left:7px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="leftMotorMeterPos" value="0" min="0.0" max="75.0"></span>
+<span style="position:absolute; left:27px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="rightMotorMeterPos" value="0" min="0.0" max="75.0"></span>
+<span style="position:absolute; left:7px; top:73px;"><meter style="width:40px; transform:rotate(90deg) scaleY(-1); -webkit-transform: rotate(90deg) scaleY(-1); -moz-transform: rotate(90deg) scaleY(-1);" id="leftMotorMeterNeg" value="0" min="0" max="75" high="2" optimum="1"></span>
+<span style="position:absolute; left:27px; top:73px;"><meter style="width:40px; transform:rotate(90deg) scaleY(-1); -webkit-transform: rotate(90deg) scaleY(-1); -moz-transform: rotate(90deg) scaleY(-1);" id="rightMotorMeterNeg" value="0" min="0.0" max="75.0" high="2" optimum="1"></span>
+<span id="LValue" style="width:40px; text-align:center; position:absolute; left:8px; top:104px; font-size:8pt">L</span>
+<span id="RValue" style="width:40px; text-align:center; position:absolute; left:27px; top:104px; font-size:8pt">R</span>
+</div>
 
 
 <script type="text/javascript">
@@ -341,6 +412,8 @@ lookRightPan = 150;
 catMode = 0;
 laserOn = 0;
 scanMode = 0;
+motionDetectMode = 0;
+
 function scanButtonClicked()
 {
     if (scanMode)
@@ -359,6 +432,7 @@ function scanButtonClicked()
 
     scanMode = !scanMode;
 }
+
 function catButtonClicked()
 {
     if (catMode)
@@ -377,6 +451,22 @@ function catButtonClicked()
     catMode = !catMode;
 }
 
+function motionDetectButtonClicked()
+{
+    if (motionDetectMode)
+    {
+        sendCommand("MOT:0");
+	document.getElementById("motionDetectButton").value="Motion Detection On";
+    }
+    else
+    {
+	sendCommand("MOT:1");
+	document.getElementById("motionDetectButton").value="MotionDetection Off";
+    }
+
+    motionDetectMode = !motionDetectMode;
+}
+
 function laserButtonClicked()
 {
     if (laserOn)
@@ -391,6 +481,26 @@ function laserButtonClicked()
     }
 
     laserOn = !laserOn;
+}
+
+function rotateLeft()
+{
+    sendCommand("ROT:-90");
+}
+
+function rotateRight()
+{
+    sendCommand("ROT:90");
+}
+
+function leftWallButtonClicked()
+{
+    sendCommand("W:L");
+}
+
+function rightWallButtonClicked()
+{
+    sendCommand("W:R");
 }
 
 function speakButtonClicked() {
@@ -411,6 +521,40 @@ function speakButtonClicked() {
     req.send("text=" + text + "&speed=" + speedRange.value);
 //    document.getElementById("speakText").value = "";
     document.getElementById("speakText").focus();
+}
+
+function meowButtonClicked() {
+    var req = new XMLHttpRequest();
+    req.open("POST","meow.php", true);
+    req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    req.setRequestHeader("Content-Length", 0); // POST request MUST have a Content-Length header (as per HTTP/1.1)
+    req.onreadystatechange = function() {
+        if (req.readyState == 4)
+	{
+	    if (req.status == 200)
+	    {
+//		alert(req.responseText);
+	    }
+	}
+    }
+    req.send("");
+}
+
+function barkButtonClicked() {
+    var req = new XMLHttpRequest();
+    req.open("POST","bark.php", true);
+    req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    req.setRequestHeader("Content-Length", 0); // POST request MUST have a Content-Length header (as per HTTP/1.1)
+    req.onreadystatechange = function() {
+        if (req.readyState == 4)
+	{
+	    if (req.status == 200)
+	    {
+//		alert(req.responseText);
+	    }
+	}
+    }
+    req.send("");
 }
 
 function volumeChanged()
@@ -481,6 +625,13 @@ function initCamera2()
 function initCamera3()
 {
     send_cmd('wb auto');
+    init_gauges();
+}
+
+var attitude = $.flightIndicator('#attitude', 'attitude', {size:125, roll:0, pitch:0, showBox : false});
+var battery = $.flightIndicator('#battery', 'airspeed', {size:125, showBox : false});
+function init_gauges()
+{
 }
 
 function resetPanTilt()
@@ -545,6 +696,27 @@ function sendCommand(cmd)
 
 var telemetry = new Array();
 var updateBearingCounter = 0;
+showCompass = true;
+
+function showHideCompass()
+{
+    if (showCompass)
+    {
+	showCompass = false;
+	document.getElementById("headingIndicator").style["visibility"] = "hidden";
+	document.getElementById("bearingArrow").style["visibility"] = "hidden";
+	document.getElementById("compass").style["visibility"] = "hidden";
+	document.getElementById("compassButton").value = "Show Compass";
+    }
+    else
+    {
+	showCompass = true;
+	document.getElementById("headingIndicator").style["visibility"] = "visible";
+	document.getElementById("bearingArrow").style["visibility"] = "visible";
+	document.getElementById("compass").style["visibility"] = "visible";
+	document.getElementById("compassButton").value = "Hide Compass";
+    }
+}
 
 function formatTelemetryData(data)
 {
@@ -563,7 +735,10 @@ function formatTelemetryData(data)
     document.getElementById('latLong').innerHTML = "Position: " + telemetry["Latitude"] + ", " + telemetry["Longitude"] +
 		"<br/>Range: " + telemetry["Waypoint Range"] + "<br/>Heading: " + telemetry["Heading"];
 
-    document.getElementById('headingIndicator').innerHTML = "Heading: " + telemetry["Heading"];
+    document.getElementById('headingIndicator').innerHTML = "Heading: " + telemetry["Heading"] + "<br/>Target Heading: " + telemetry["Target Heading"];
+
+    if (showCompass == false)
+        return;
 
 //    document.getElementById('headingArrow').style.MozTransform = "rotate(" + telemetry["heading"] + "deg)";
 //    document.getElementById('headingArrow').style.webkitTransform = "rotate(" + telemetry["heading"] + "deg)";
@@ -576,8 +751,8 @@ function formatTelemetryData(data)
     document.getElementById('compass').style["MozTransform"] = "rotate(" + compassDir + "deg)";
 
 
-    if (updateBearingCounter++ <= 10)
-	return;
+//    if (updateBearingCounter++ <= 10)
+//	return;
 
     updateBearingCounter = 0;
 
@@ -606,7 +781,55 @@ function formatTelemetryData(data)
     document.getElementById('bearingArrow').style.left = x + "px";
 
     // Show some debugging info
-    document.getElementById('debug').innerHTML="relativeBearing = " + relativeBearing + "<br/>bearingInRadians = " + parseFloat(Math.round(bearingInRadians * 100) / 100).toFixed(2) + "<br/>angle = " + parseFloat(Math.round(angle * 100) / 100).toFixed(2) + "<br/>x = " + parseFloat(Math.round(x * 100) / 100).toFixed(2) + "<br/>y = " + parseFloat(Math.round(y * 100) / 100).toFixed(2);
+//    document.getElementById('debug').innerHTML="relativeBearing = " + relativeBearing + "<br/>bearingInRadians = " + parseFloat(Math.round(bearingInRadians * 100) / 100).toFixed(2) + "<br/>angle = " + parseFloat(Math.round(angle * 100) / 100).toFixed(2) + "<br/>x = " + parseFloat(Math.round(x * 100) / 100).toFixed(2) + "<br/>y = " + parseFloat(Math.round(y * 100) / 100).toFixed(2);
+
+    // Update the voltage meter
+    document.getElementById('voltageMeter1').value = telemetry["Main Bus Voltage"].slice(0,-1);
+    document.getElementById('voltageText1').innerText = telemetry["Main Bus Voltage"];
+
+    // Update the gyro meters
+    document.getElementById('gyroXMeter').value = Math.abs(telemetry["GyroX"]);
+    document.getElementById('gyroYMeter').value = Math.abs(telemetry["GyroY"]);
+    document.getElementById('gyroZMeter').value = Math.abs(telemetry["GyroZ"]);
+
+    // Update the motor meters
+    leftMotorPower = telemetry["LEFT MOTOR"].trim();
+    rightMotorPower = telemetry["RIGHT MOTOR"].trim();
+    if (leftMotorPower > 0)
+    {
+	document.getElementById('leftMotorMeterPos').value = leftMotorPower;
+	document.getElementById('leftMotorMeterNeg').value = 0;
+    }
+    else
+    {
+	document.getElementById('leftMotorMeterNeg').value = -leftMotorPower;
+	document.getElementById('leftMotorMeterPos').value = 0;
+    }
+    if (rightMotorPower > 0)
+    {
+	document.getElementById('rightMotorMeterPos').value = rightMotorPower;
+	document.getElementById('rightMotorMeterNeg').value = 0;
+    }
+    else
+    {
+	document.getElementById('rightMotorMeterNeg').value = -rightMotorPower;
+	document.getElementById('rightMotorMeterPos').value = 0;
+    }
+    document.getElementById('LValue').innerHTML=leftMotorPower;
+    document.getElementById('RValue').innerHTML=rightMotorPower;
+
+
+    // Update the attitude indicator
+//    attitude.setRoll(telemetry["Roll Angle"].slice(1,-8));
+//    attitude.setPitch(telemetry["Pitch Angle"].slice(1,-8));
+    roll = parseFloat(telemetry["Roll Angle"].trim());
+    pitch = parseFloat(telemetry["Pitch Angle"].trim());
+    attitude.setRoll(roll);
+    attitude.setPitch(pitch);
+
+    // Update the battery indicator
+    batt = parseFloat(telemetry["Main Bus Voltage"].trim());
+    battery.setAirSpeed(batt * 10);
 }
 
 
@@ -725,7 +948,7 @@ function getCoordsPanTilt(e)
    }
 }
 
-var timer = setInterval(function() { callPHP_getData() }, 200);
+var timer = setInterval(function() { callPHP_getData() }, 100);
 
 
 </script>

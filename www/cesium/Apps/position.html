@@ -16,10 +16,10 @@
       }
   </style>
   <script>
-function readTextFile(file)
+function readTextFile(file,async)
 {
     var rawFile = new XMLHttpRequest();
-    rawFile.open("GET", file, false);
+    rawFile.open("GET", file, async);
     rawFile.onreadystatechange = function ()
     {
         if(rawFile.readyState == 4)
@@ -37,7 +37,7 @@ function readTextFile(file)
 function readWaypoints()
 {
     var rawFile = new XMLHttpRequest();
-    rawFile.open("GET", "waypoints.dat?dummyParam="+Math.random(), false);
+    rawFile.open("GET", "waypoints.dat?dummyParam="+Math.random(), true);
     rawFile.onreadystatechange = function ()
     {
         if(rawFile.readyState == 4)
@@ -77,6 +77,7 @@ function readWaypoints()
 // lat|long|lat-accuracy|long-accuracy
 var telemetry;
 var waypoints = [];
+Cesium.BingMapsApi.defaultKey = "AsfI6g9YSCK_ScojYNYTdi6Tu59kDIzPasD3FoZK6SoUd9VTBrFv7eKu_8e8Ja9u";
 var viewer = new Cesium.Viewer('cesiumContainer',{
 	 	timeline:false,
 		animation:false,
@@ -97,7 +98,7 @@ try {
   if (viewer != undefined)
   {
 
-    readTextFile("telemetry.dat");
+    readTextFile("telemetry.dat", true);
     if (telemetry.length != 6)
 	return;
 
@@ -222,7 +223,7 @@ function setup()
 //    viewer.scene.morphTo2D();
 
 
-    readTextFile("telemetry.dat");
+    readTextFile("telemetry.dat", false);
     readWaypoints();
 
     updateGPSCircle();
@@ -235,7 +236,7 @@ function setup()
 }
 function startUpdates()
 {
-    setInterval('updateGPSCircle();', 1000);
+    setInterval('updateGPSCircle();', 2000);
 }
 
   </script>
