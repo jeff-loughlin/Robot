@@ -31,8 +31,8 @@ float AA = 0.98; // complementary filter constant
 const int CAL_SAMPLES = 10;
 
 
-const float rollOffset = -1.75;
-const float pitchOffset = -4.81;
+const float rollOffset = 0.00;
+const float pitchOffset = 0.00;
 
 
 // Mag calibration constants
@@ -88,6 +88,8 @@ int distance1 = 0;
 unsigned long distance1_t;
 int distance2 = 0;
 unsigned long distance2_t;
+int distance3 = 0;
+unsigned long distance3_t;
 int switch1 = 0;
 unsigned long switch1_t;
 int switch2 = 0;
@@ -100,6 +102,8 @@ double gyroX, gyroY, gyroZ;
 unsigned long gyroX_t, gyroY_t, gyroZ_t;
 int gyroDeltaT;
 unsigned long gyroDeltaT_t;
+float voltage1;
+unsigned long voltage1_t;
 
 // Say "ouch" when bumped
 bool ouchEnabled = true;
@@ -131,7 +135,8 @@ int gyroXCal = 0, gyroYCal = 0, gyroZCal = 0;
 // Accelerometer calibration values
 int accelXCal = 0, accelYCal = 0, accelZCal = 980;
 
-
+// When motion detection is activated. this will hold the child process PID so we can kill it later
+pid_t motPID;
 
 // Kalman filters for smoothing magnetometerm, accelerometer, and calculated heading data
 Kalman headingFilter(0.125, 4, 1, 0);
@@ -150,6 +155,8 @@ Kalman zGyroFilter(0.125, 4, 1, 0);
 Kalman rollFilter(0.125, 4, 1, 0);
 Kalman pitchFilter(0.125, 4, 1, 0);
 
+Kalman voltageFilter(0.125, 4, 1, 0);
+
 //int rotationDegrees = 0;
 
 // PID controller variables for heading
@@ -158,7 +165,7 @@ PID headingPID(&headingPIDInput, &headingPIDOutput, &targetHeading,1,0,0, DIRECT
 
 // PID controller variables for wall follower (distance from wall)
 double SetDistance, wallPIDInput, wallPIDOutput;
-PID wallFollowerPID(&wallPIDInput, &wallPIDOutput, &SetDistance, 5, .1, .5, DIRECT);
+PID wallFollowerPID(&wallPIDInput, &wallPIDOutput, &SetDistance, 5, 0, 0, DIRECT);
 
 // PID controller variables for manual control
 double SetGyro, gyroPIDInput, gyroPIDOutput;
@@ -245,11 +252,22 @@ void ProcessSerialMsg(const char *msg)
     {
 	distance1 = strtol(val, 0, 10);
 	distance1_t = millis();
+	if (distance1 == 0 || distance1 > 100)
+	    distance1 = 100;
     }
     else if (!strcmp(msgType, "DIS2"))
     {
 	distance2 = strtol(val, 0, 10);
 	distance2_t = millis();
+	if (distance2 == 0 || distance2 > 100)
+	    distance2 = 100;
+    }
+    else if (!strcmp(msgType, "DIS3"))
+    {
+	distance3 = strtol(val, 0, 10);
+	distance3_t = millis();
+	if (distance3 == 0 || distance3 > 100)
+	    distance3 = 100;
     }
     else if (!strcmp(msgType, "S1"))
     {
@@ -260,6 +278,13 @@ void ProcessSerialMsg(const char *msg)
     {
 	switch2 = strtol(val, 0, 10);
 	switch2_t = millis();
+    }
+    else if (!strcmp(msgType, "VLT1"))
+    {
+        float v = strtof(val, 0) / 100;
+	voltageFilter.update(v);
+	voltage1 = voltageFilter.GetValue();
+        voltage1_t = millis();
     }
 }
 
@@ -389,7 +414,7 @@ void Setup(int *fdSerial, const char *serialDev)
     {
 	printf("Failed to open tty device\n");
         perror(serialDev);
-        exit(-1);
+        return;
     }
 
     printf("Setting serial device attributes\n");
@@ -459,7 +484,7 @@ void Setup(int *fdSerial, const char *serialDev)
     headingPID.SetOutputLimits(-NORMAL_SPEED, NORMAL_SPEED);
     headingPID.SetMode(AUTOMATIC);
 
-    SetDistance = 40.0;
+    SetDistance = 25.0;
     wallFollowerPID.SetOutputLimits(-NORMAL_SPEED, NORMAL_SPEED);
     wallFollowerPID.SetMode(AUTOMATIC);
 
@@ -572,8 +597,8 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
     printf("\033[1mFiltered Heading:    %d\033[0m \n", (int)filteredHeading);
     printf("\033[1mTarget Heading:      %d\033[0m \n", (int)targetHeading);
     printf("PID error:           %d\n", (int)headingPIDOutput);
-    fprintf(outFile, "Roll Angle:  %c%3.1f degrees\n",  rollAngle + rollOffset < 0 ? '\0' : ' ', rollAngle + rollOffset);
-    fprintf(outFile, "Pitch Angle: %c%3.1f degrees\n",  pitchAngle + pitchOffset < 0 ? '\0' : ' ', pitchAngle + pitchOffset);
+    fprintf(outFile, "Roll Angle:  %c%3.1f degrees\n",  rollAngle + rollOffset < 0 ? ' ' : ' ', rollAngle + rollOffset);
+    fprintf(outFile, "Pitch Angle: %c%3.1f degrees\n",  pitchAngle + pitchOffset < 0 ? ' ' : ' ', pitchAngle + pitchOffset);
     fprintf(outFile, "Heading: %d\n", (int)filteredHeading);
     fprintf(outFile, "Target Heading: %d\n", (int)targetHeading);
     fprintf(outFile, "PID error:           %d\n", (int)headingPIDOutput);
@@ -818,12 +843,42 @@ void ManualControl(ControlMode *manualControl)
 	    leftWallFollowMode = true;
 	    rightWallFollowMode = false;
 	    manualControl->active = false;
+	    manualServoPan = 40;
+	    manualServoTilt = 130;
+	    SetServoAngle(PAN_SERVO, manualServoPan);
+	    SetServoAngle(TILT_SERVO, manualServoTilt);
 	}
 	else if (!strcmp(val, "R"))
 	{
 	    leftWallFollowMode = false;
 	    rightWallFollowMode = true;
 	    manualControl->active = false;
+	    manualServoPan = 160;
+	    manualServoTilt = 130;
+	    SetServoAngle(PAN_SERVO, manualServoPan);
+	    SetServoAngle(TILT_SERVO, manualServoTilt);
+	}
+    }
+    else if (!strcmp(msgType, "MOT"))
+    {
+	bool on = strtol(val, 0, 10);
+	if (on == 1)
+	{
+	    signal(SIGCHLD, SIG_IGN);
+	    motPID = fork();
+	    if(motPID >= 0)
+	    {
+		if(motPID == 0)
+		{
+		    // Child process
+		    execl("./mdetect", "./mdetect", (char *)0);
+		    _exit(0);
+		}
+	    }
+	}
+	else
+	{
+	    kill(motPID, SIGKILL);
 	}
     }
     else if (!strcmp(msgType, "PT"))
@@ -1024,11 +1079,11 @@ static void *rotateDegreesThread(void *threadParam)
     if (threadActive)
 	return 0;
     threadActive = true;
-    
+
     int degrees = *(int*)threadParam;
     free(threadParam);  // Must have been malloc()'d by the caller of this thread routine!!
 
-    
+
     int startHeading = headingFilter.GetValue();
     int targetHeading = startHeading + degrees;
     if (targetHeading < 0)
@@ -1056,9 +1111,9 @@ static void *rotateDegreesThread(void *threadParam)
     do
     {
 	// Use the Z gyro to integrate turn rate over time.  Stop turning when we've turned the target number of degrees.
-	turn += (zGyroFilter.GetValue() * gyroDeltaT / 1000);
-	if (abs(turn) > abs(degrees))
-	    done = true;
+//	turn += (zGyroFilter.GetValue() * gyroDeltaT / 1000);
+//	if (abs(turn) > abs(degrees))
+//	    done = true;
 	
 	// Backup method - use the magnetometer to see what direction we're facing.  Stop turning when we reach the target heading.
 	int currentHeading = (int)heading;//headingFilter.GetValue();
@@ -1190,12 +1245,15 @@ static void *GpsThread(void *)
 {
     // Init libgps so we can get gps data
     // connect to GPSd
+    memset(&gpsData, 0, sizeof(gpsData));
+    printf("Connecting To GPSD\n");
     while (gps_open("localhost", "2947", &gpsData) < 0)
     {
         fprintf(stderr,"Could not connect to GPSd\n");
 	sleep(10);
     }
 
+    printf("Successfully connected to GPSD\n");
     //register for updates
     gps_stream(&gpsData, WATCH_ENABLE | WATCH_JSON, NULL);
 
@@ -1242,6 +1300,13 @@ static void *GpsThread(void *)
 			latitude = gpsData.fix.latitude;
 			longitude = gpsData.fix.longitude;
 
+			// Recent gpsd versions don't set fix.epx and fix.epy correctly (at least not with my gps unit).
+			// Use dop.hdop instead, and do the calculation here to find the horizontal position error in meters
+			// (Code lifted from gpsd_error_model() in libgpsd_core.c)
+//			double h_uere =
+//		        	(session->gpsdata.status == STATUS_DGPS_FIX ? H_UERE_WITH_DGPS : H_UERE_NO_DGPS);
+//			latitude_error = gpsData.dop.hdop * h_uere; // gpsData.fix.epy;
+//			longitude_error = gpsData.dop.hdop * h_ueru; // gpsData.fix.epx;
 			latitude_error = gpsData.fix.epy;
 			longitude_error = gpsData.fix.epx;
 			gps_fix = gpsData.fix.mode;
@@ -1360,6 +1425,7 @@ void *IMUThread(void *)
 		accelX = imuData.accel.x() * 10;   // m/s^2
 		accelY = imuData.accel.y() * 10;   // m/s^2
 		accelZ = imuData.accel.z() * 10;   // m/s^2
+
 		xAccelFilter.update(accelX);
 		yAccelFilter.update(accelY);
 		zAccelFilter.update(accelZ);
@@ -1377,11 +1443,12 @@ void *IMUThread(void *)
 //		gyroY = yGyroFilter.GetValue();
 //		gyroZ = zGyroFilter.GetValue();
 
-		rollFilter.update(rollAngle);
-		pitchFilter.update(pitchAngle);
-		rollAngle = rollFilter.GetValue();
-		pitchAngle = pitchFilter.GetValue();
-		
+// *jdl* 10/25/2016 get rid of the roll and pitch filters - too slow to respond
+////		rollFilter.update(rollAngle);
+////		pitchFilter.update(pitchAngle);
+////		rollAngle = rollFilter.GetValue();
+////		pitchAngle = pitchFilter.GetValue();
+
 		gyroDeltaT = millis() - lastMillis;
 		lastMillis = millis();
 	    }
@@ -1910,26 +1977,38 @@ void giveGreeting()
     int savedTilt = tiltServo;
     panTiltTo(43, 120);
 
+    char greeting[256];
+    strcpy(greeting, "Good morning, humans.");
+    speak(greeting);
+
     // Get the weather
     FILE *fp = popen("./weather", "r");
-    if (fp == NULL)
-	return;
+    if (fp != NULL)
+    {
+	char weather[256] = "";
+	fgets(weather, 256, fp);
+	pclose(fp);
 
-    char weather[256] = "";
-    fgets(weather, 256, fp);
 
-    pclose(fp);
+	strcpy(greeting, "Todays weather will be ");
+	strcat(greeting, weather);
+	speak(greeting);
+    }
 
-    char greeting[256];
-    strcpy(greeting, "Good morning.");
+    // Get the score of yestderday's Phillies game
+    fp = popen("./score Phillies", "r");
+    if (fp != NULL)
+    {
+	char score[256] = "";
+	fgets(score, 256, fp);
+	pclose(fp);
 
-    speak(greeting);
-
-    strcpy(greeting, "Todays weather will be ");
-    strcat(greeting, weather);
-    speak(greeting);
-
-    sleep(5);
+	if (strlen(score))
+	{
+	    speak(score);
+	}
+    }
+    
     panServo = savedPan;
     tiltServo = savedTilt;
     SetServoAngle(PAN_SERVO, panServo);
@@ -1950,7 +2029,7 @@ static void *GreetingThread(void *)
 	    gaveGreetingToday = false;
 	    saidGoodnight = false;
 	}
-	if (getLightLevel() < 30)
+	if (getLightLevel() < 40)
 	{
 	    if (!inTheDark)
 	    {
@@ -1966,7 +2045,24 @@ static void *GreetingThread(void *)
 		    // It's dark, it's after 10 PM, and we haven't said goodnight yet.  Say goodnight.
 		    if (!saidGoodnight && time_tm->tm_hour >= 22)
 		    {
-			speak("Good night.");
+			char msg[256];
+			int r = rand() % 4;
+			switch (r)
+			{
+			case 0:
+			    strcpy(msg, "Goodnight.");
+			    break;
+			case 1:
+			    strcpy(msg, "Nighty night.");
+			    break;
+			case 2:
+			    strcpy(msg, "Yikes.  I am scared of the dark.");
+			    break;
+			default:
+			    strcpy(msg, "Goodnight, humans.");
+			    break;
+			}
+			speak(msg);
 			saidGoodnight = true;
 		    }
 		}
@@ -1997,6 +2093,7 @@ static void *GreetingThread(void *)
     return NULL;
 }
 
+bool voltageHysteresis = FALSE;
 
 int calFlag = 0;
 int waypointFlag = 1;  // default
@@ -2074,9 +2171,17 @@ int main(int argc, char **argv)
     pthread_t gpsThreadId;
     pthread_create(&gpsThreadId, NULL, GpsThread, NULL);
 
-    printf("Starting ReadSerial thread\n");
+
     pthread_t serialThreadId;
-    pthread_create(&serialThreadId, NULL, ReadSerialThread, NULL);
+    if (fdSerial >= 0)
+    {
+	printf("Starting ReadSerial thread\n");
+	pthread_create(&serialThreadId, NULL, ReadSerialThread, NULL);
+    }
+    else
+    {
+	printf("**** Not starting serial thread - serial device not available ****\n");
+    }
 
     printf("Starting Greeting thread\n");
     pthread_t greetingThreadId;
@@ -2137,7 +2242,7 @@ int main(int argc, char **argv)
 	    {
 		case STATUS_NO_FIX: strcpy(gps_status, "NO FIX"); break;
 		case STATUS_FIX: strcpy(gps_status, "FIX - NO DGPS"); break;
-		case STATUS_DGPS_FIX: strcpy(gps_status, "FIX - DGPS"); break;
+//		case STATUS_DGPS_FIX: strcpy(gps_status, "FIX - DGPS"); break;
 		default: strcpy(gps_status, "Unknown"); break;
  	    }
 	    printf("GPS STATUS: %s\n", gps_status);
@@ -2146,10 +2251,13 @@ int main(int argc, char **argv)
             printf("    Longitude: %f\n", longitude);
 	    printf("    Latitude Accuracy:  %dm\n", (int)latitude_error);
 	    printf("    Longitude Accuracy: %dm\n", (int)longitude_error);
-            printf("Distance1: %d\n", distance1);
-            printf("Distance2: %d\n", distance2);
+            printf("Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
+            printf("Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
+            printf("Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
             printf("Light Intensity: %3.2f\n", lightIntensity);
             printf("LED: %s\n", led ? "ON" : "OFF");
+	    printf("Wall PID output: %f\n", wallPIDOutput);
+	    printf("Main Bus Voltage: %2.2fV\n", voltage1);
 //	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
 //	    printf("Dark: %s\n", inTheDark?"true":"false");
 //	    printf("Dark timer: %lu\n", timeInDark);
@@ -2174,12 +2282,14 @@ int main(int argc, char **argv)
             fprintf(outFile, "Longitude: %f\n", longitude);
 	    fprintf(outFile, "Latitude Accuracy: %dm\n", (int)latitude_error);
 	    fprintf(outFile, "Longitude accuracy: %dm\n", (int)longitude_error);
-            fprintf(outFile, "Distance1: %d\n", distance1);
-//            fprintf(outFile, "Distance2: %d\n", distance2);
-	    fprintf(outFile, "GyroX: %c%2.2f\n", xGyroFilter.GetValue() >= 0 ? ' ' : '\0', xGyroFilter.GetValue());
-	    fprintf(outFile, "GyroY: %c%2.2f\n", yGyroFilter.GetValue() >= 0 ? ' ' : '\0', yGyroFilter.GetValue());
-	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : '\0', zGyroFilter.GetValue());
+            fprintf(outFile, "Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
+            fprintf(outFile, "Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
+            fprintf(outFile, "Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
+	    fprintf(outFile, "GyroX: %c%2.2f\n", xGyroFilter.GetValue() >= 0 ? ' ' : ' ', xGyroFilter.GetValue());
+	    fprintf(outFile, "GyroY: %c%2.2f\n", yGyroFilter.GetValue() >= 0 ? ' ' : ' ', yGyroFilter.GetValue());
+	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : ' ', zGyroFilter.GetValue());
 	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
+	    fprintf(outFile, "Main Bus Voltage: %2.2fV\n", voltage1);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 
             lastSubMillis = millis();
@@ -2200,6 +2310,25 @@ int main(int argc, char **argv)
 	    ouchEnabled = false;
 
 	motorsRunning = leftMotorPower && rightMotorPower;
+
+	// Shut down if the battery level drops below 10.8V
+	if (voltage1 > 11.2)
+	    voltageHysteresis = TRUE;
+	if (voltageHysteresis && leftMotorPower == 0 && rightMotorPower == 0 && voltage1 < 10.8)
+	{
+	    signal(SIGCHLD, SIG_IGN);
+	    long shutdownPID = fork();
+	    if (shutdownPID >= 0)
+	    {
+		if (shutdownPID == 0)
+		{
+		    // Child process
+		    execl(getenv("SHELL"),"sh","-c","sudo shutdown -h now",NULL);
+		    _exit(0);
+		}
+	    }
+	}
+
 
         if (waypointFlag && millis() - lastGPSMillis > CALCULATE_GPS_HEADING_INTERVAL)
         {

@@ -6,7 +6,7 @@ OBJS = robot.o kalman.o PID_v1.o geocoords.o imu.o
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CFLAGS  = -g -Wall -DDEFAULTDEVICE=\"/dev/ttyACM0\"
+CFLAGS  = -g -Wall -DDEFAULTDEVICE=\"/dev/ttyUSB0\"
 
 
 # the build target executable:

@@ -53,7 +53,7 @@ void parse_object(json_object *obj)
 	    {
 		const char *str = json_object_get_string(val);
 		strcpy(conditions, str);
-		printf("%s with a high temperature of %d degrees\n", str, high);// and a low of %d\n", str, high, low);
+		printf("%s with a high temperature of %d degrees fahrenheit.\n", str, high);// and a low of %d\n", str, high, low);
 		exit(0);
 	    }
 	    if (strcmp(key, "date") == 0 && !flag_show_all)
@@ -133,9 +133,9 @@ void parseConfigFile(char *apiKey, char *city, char *state)
     // NOTE:  This is a quick-and-dirty routine and doesn't handle a malformed .weatherrc file very well.
     //        Lots of room for improvement here
     //
-    const char *home = getenv("HOME");
+//    const char *home = getenv("HOME");
     char filename[256];
-    sprintf(filename,"%s/.weatherrc", home);
+    sprintf(filename,"/home/jeff/.weatherrc");
     FILE *f = fopen(filename, "r");
     if (f == 0)
     {
@@ -167,7 +167,7 @@ void parseConfigFile(char *apiKey, char *city, char *state)
 
 int main(int argc, char **argv)
 {
-    char result[8192];
+    char result[16384];
     CURL *curl;
     CURLcode res;
 
