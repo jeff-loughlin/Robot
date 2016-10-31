@@ -298,12 +298,12 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <img onmousedown='motorMouseDown();' onmousemove='motorMouseMove(event);' onmouseup='motorMouseUp();' draggable="false" ondragstart="return false;" src="crosshairs-640x480.png" style="opacity:0.5; position:absolute; top:35px; left:15px; height:375px; width:500px"/>
 
 <!-- Telemetry data -->
-<div style="position:absolute; top:620px; left:10px; " id="data"></div>
+<div style="position:absolute; top:740px; left:10px; " id="data"></div>
 
 
 <!-- Misc informational text - motor command, download linkm mouse coords (for debugging), etc -->
 <div style="position:absolute; top: 400px; left:10px"><p><a href="vids.php">Download Videos and Images</a></p></div>
-<div style="position: absolute; top: 600px; left: 10px" id="coordsMotors">Motors Cmd:</div>
+<div style="position: absolute; top: 390px; left: 200px; color:red" id="coordsMotors">Motors Cmd:</div>
 <div style="position:absolute; left:550px; top:300px;" id="coords"></div>
 
 
@@ -362,12 +362,6 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 </table>
 </div>
 
-<div style="position:absolute; top:770px; left:500px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
-<table>
-<tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16.0" high="15.0" low="11.0" optimum="13.0"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
-<tr><td align="right">Secondary Bus Voltage:</td><td><meter id="voltageMeter2" value="5" min="0" max="16.0" high="7.0" low="3.0"optimum="5.0"></meter></td><td align="right"><span id="voltageText2">5.0V</span></td></tr>
-</table>
-</div>
 
 <div id="debug" style="position:absolute; top:420px; left:525px;"></div>
 
@@ -377,9 +371,10 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <span id="battery"></span>
 </div>
 
+<div style="width:318px; height:230px; position:absolute; top:470px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 
 <!-- Gyro meters -->
-<div style="width:70px; height:120px; position:absolute; top:470px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; height:120px; position:absolute; top:10px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <div style="width:70px; text-align:center;">Gyros</div>
 <span style="position:absolute; left:-25px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroXMeter" value="0" min="0.0" max="20.0" high="10" optimum="0"></span>
 <span style="position:absolute; left:-5px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroYMeter" value="0" min="0.0" max="20.0" high="10" optimum="0"></span>
@@ -389,8 +384,18 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <span style="position:absolute; left:52px; top:100px">z</span>
 </div>
 
+<!-- Control mode indicators -->
+<div style="width:130px; height:110px; position:absolute; top:15px; left:92px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:130px; text-align:center;">Control Mode</div>
+<table style="margin:auto; width:75px; horizontal-align:center; text-align:center">
+  <tr><td id="manualModeIndicator" style="width:50px; background-color:green">Manual</td></tr>
+  <tr><td id="wallModeIndicator" style="width:50px; background-color:red">Wall</td></tr>
+  <tr><td id="headingModeIndicator" style="width:50px; background-color:red">Heading</td></tr>
+</table>
+</div>
+
 <!-- Motor meters -->
-<div style="width:70px; height:120px; position:absolute; top:470px; left:150px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; height:120px; position:absolute; top:10px; left:235px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <div style="width:70px; text-align:center;">Motors</div>
 <span style="position:absolute; left:7px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="leftMotorMeterPos" value="0" min="0.0" max="75.0"></span>
 <span style="position:absolute; left:27px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="rightMotorMeterPos" value="0" min="0.0" max="75.0"></span>
@@ -400,7 +405,15 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <span id="RValue" style="width:40px; text-align:center; position:absolute; left:27px; top:104px; font-size:8pt">R</span>
 </div>
 
+<div style="position:absolute; top:150px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<table>
+<tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16.0" high="15.0" low="11.0" optimum="13.0"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
+<tr><td align="right">Secondary Bus Voltage:</td><td><meter id="voltageMeter2" value="5" min="0" max="16.0" high="7.0" low="3.0"optimum="5.0"></meter></td><td align="right"><span id="voltageText2">5.0V</span></td></tr>
+</table>
+</div>
 
+
+</div>
 <script type="text/javascript">
 
 panCenter = 102;
@@ -830,6 +843,26 @@ function formatTelemetryData(data)
     // Update the battery indicator
     batt = parseFloat(telemetry["Main Bus Voltage"].trim());
     battery.setAirSpeed(batt * 10);
+
+    // Update control mode indicators
+    if (telemetry["ManualControl"] == "Active")
+    {
+	document.getElementById('manualModeIndicator').style.backgroundColor="green";
+	document.getElementById('wallModeIndicator').style.backgroundColor="red";
+	document.getElementById('headingModeIndicator').style.backgroundColor="red";
+    }
+    else if (telemetry["SteerToHeadingControl"] == "Active")
+    {
+	document.getElementById('manualModeIndicator').style.backgroundColor="red";
+	document.getElementById('wallModeIndicator').style.backgroundColor="red";
+	document.getElementById('headingModeIndicator').style.backgroundColor="green";
+    }
+    if (telemetry["WallFollowerControl"] == "Active")
+    {
+	document.getElementById('manualModeIndicator').style.backgroundColor="red";
+	document.getElementById('wallModeIndicator').style.backgroundColor="green";
+	document.getElementById('headingModeIndicator').style.backgroundColor="red";
+    }
 }
 
 
