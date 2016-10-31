@@ -322,7 +322,10 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <!-- Telemetry data superimposed over the cesium display and video feed -->
 <div id="latLong" style="position:absolute; top:35px; left:785px; color:#ff0000"></div>
 <img id="bearingArrow" src="pointer.png" style="position:absolute; top:35px; left: 20px; width:25px; height:25px"/>
-<div id="headingIndicator" style="position:absolute; top: 35px;left:20px; color:#ff0000"></div>
+<div id="headingIndicator" style="position:absolute; top: 35px;left:20px; color:red; font-size:8pt"></div>
+<div id="distance1Indicator" style="font-size:8pt; position:absolute; top:35px; left:425px; color:red; width:100px; text-align:left"></div>
+<div id="distance2Indicator" style="font-size:8pt; position:absolute; top:47px; left:425px; color:red; width:100px; text-align:left"></div>
+<div id="distance3Indicator" style="font-size:8pt; position:absolute; top:59px; left:425px; color:red; width:100px; text-align:left"></div>
 
 
 <!-- Speak input box -->
@@ -863,6 +866,11 @@ function formatTelemetryData(data)
 	document.getElementById('wallModeIndicator').style.backgroundColor="green";
 	document.getElementById('headingModeIndicator').style.backgroundColor="red";
     }
+
+    // Update distance indicators
+    document.getElementById('distance1Indicator').innerText = "Distance 1: " + telemetry["Distance1"];
+    document.getElementById('distance2Indicator').innerText = "Distance 2: " + telemetry["Distance2"];
+    document.getElementById('distance3Indicator').innerText = "Distance 3: " + telemetry["Distance3"];
 }
 
 
