@@ -31,8 +31,8 @@ float AA = 0.98; // complementary filter constant
 const int CAL_SAMPLES = 10;
 
 
-const float rollOffset = 0.00;
-const float pitchOffset = 0.00;
+const float rollOffset = 3.40;
+const float pitchOffset = 6.90;
 
 
 // Mag calibration constants
@@ -1093,28 +1093,30 @@ static void *rotateDegreesThread(void *threadParam)
 
     if (degrees < 0)
     {
-	manualPowerLeft = 50;
-	manualPowerRight = -50;
-	SetMotorSpeed(LEFT_MOTOR, 50);
-	SetMotorSpeed(RIGHT_MOTOR, -50);
-    }
-    else
-    {
 	manualPowerLeft = -50;
 	manualPowerRight = 50;
 	SetMotorSpeed(LEFT_MOTOR, -50);
 	SetMotorSpeed(RIGHT_MOTOR, 50);
     }
+    else
+    {
+	manualPowerLeft = 50;
+	manualPowerRight = -50;
+	SetMotorSpeed(LEFT_MOTOR, 50);
+	SetMotorSpeed(RIGHT_MOTOR, -50);
+    }
 
     bool done = false;
-    double turn = 0.0;
+//    double turn = 0.0;
     do
     {
 	// Use the Z gyro to integrate turn rate over time.  Stop turning when we've turned the target number of degrees.
-//	turn += (zGyroFilter.GetValue() * gyroDeltaT / 1000);
-//	if (abs(turn) > abs(degrees))
+////	turn += (zGyroFilter.GetValue() * gyroDeltaT / 1000);
+//	turn += (fabs(gyroZ) * gyroDeltaT / 1000);
+//	if (fabs(turn) > fabs(degrees))
 //	    done = true;
-	
+
+//#ifdef JUNK
 	// Backup method - use the magnetometer to see what direction we're facing.  Stop turning when we reach the target heading.
 	int currentHeading = (int)heading;//headingFilter.GetValue();
 //	printf("Rotating: currentHeading = %d   targetHeading = %d\n", currentHeading, targetHeading);
@@ -1130,6 +1132,7 @@ static void *rotateDegreesThread(void *threadParam)
 	    startHeading = currentHeading;
 	if (currentHeading > startHeading && degrees < 0)
 	    startHeading = currentHeading;
+//#endif
 	usleep(100000);
     }
     while (!done);
@@ -2093,6 +2096,15 @@ static void *GreetingThread(void *)
     return NULL;
 }
 
+
+long long current_timestamp()
+{
+    struct timeval te;
+    gettimeofday(&te, NULL); // get current time
+    long long milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // caculate milliseconds
+    return milliseconds;
+}
+
 bool voltageHysteresis = FALSE;
 
 int calFlag = 0;
@@ -2291,6 +2303,7 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
 	    fprintf(outFile, "Main Bus Voltage: %2.2fV\n", voltage1);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
+	    fprintf(outFile, "Timestamp: %lld\n", current_timestamp());
 
             lastSubMillis = millis();
             fclose(outFile);
