@@ -31,8 +31,8 @@ float AA = 0.98; // complementary filter constant
 const int CAL_SAMPLES = 10;
 
 
-const float rollOffset = 3.40;
-const float pitchOffset = 6.90;
+const float rollOffset = -0.4;
+const float pitchOffset = 3.3;
 
 
 // Mag calibration constants
@@ -1984,6 +1984,7 @@ void giveGreeting()
     strcpy(greeting, "Good morning, humans.");
     speak(greeting);
 
+    usleep(1000000);
     // Get the weather
     FILE *fp = popen("./weather", "r");
     if (fp != NULL)
@@ -1999,6 +2000,7 @@ void giveGreeting()
     }
 
     // Get the score of yestderday's Phillies game
+    usleep(1000000);
     fp = popen("./score Phillies", "r");
     if (fp != NULL)
     {
@@ -2011,7 +2013,7 @@ void giveGreeting()
 	    speak(score);
 	}
     }
-    
+
     panServo = savedPan;
     tiltServo = savedTilt;
     SetServoAngle(PAN_SERVO, panServo);
@@ -2263,6 +2265,17 @@ int main(int argc, char **argv)
             printf("    Longitude: %f\n", longitude);
 	    printf("    Latitude Accuracy:  %dm\n", (int)latitude_error);
 	    printf("    Longitude Accuracy: %dm\n", (int)longitude_error);
+
+	    for (int i = 0; i < 12; i++)
+	    {
+	        if ((i < gpsData.satellites_visible)
+                       	&& (gpsData.skyview[i].used || gpsData.skyview[i].PRN == 138))
+	        {
+		    printf("        PRN%03d: %d\n", gpsData.skyview[i].PRN, (int)gpsData.skyview[i].ss);
+		}
+	    }
+
+
             printf("Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
             printf("Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
             printf("Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
@@ -2294,6 +2307,17 @@ int main(int argc, char **argv)
             fprintf(outFile, "Longitude: %f\n", longitude);
 	    fprintf(outFile, "Latitude Accuracy: %dm\n", (int)latitude_error);
 	    fprintf(outFile, "Longitude accuracy: %dm\n", (int)longitude_error);
+
+
+	    for (int i = 0; i < 12; i++)
+	    {
+	        if ((i < gpsData.satellites_visible)
+                       	&& (gpsData.skyview[i].used || gpsData.skyview[i].PRN == 138))
+	        {
+		    fprintf(outFile, "Sat.%d: %03d|%d\n", i, gpsData.skyview[i].PRN, (int)gpsData.skyview[i].ss);
+		}
+	    }
+
             fprintf(outFile, "Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
             fprintf(outFile, "Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
             fprintf(outFile, "Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
