@@ -157,6 +157,8 @@ Kalman pitchFilter(0.125, 4, 1, 0);
 
 Kalman voltageFilter(0.125, 4, 1, 0);
 
+Kalman distanceFilter1(0.125, 4, 1, 0);
+
 //int rotationDegrees = 0;
 
 // PID controller variables for heading
@@ -250,10 +252,22 @@ void ProcessSerialMsg(const char *msg)
 
     if (!strcmp(msgType, "DIS1"))
     {
-	distance1 = strtol(val, 0, 10);
+	int distance = strtol(val, 0, 10);
 	distance1_t = millis();
-	if (distance1 == 0 || distance1 > 100)
-	    distance1 = 100;
+	if (distance == 0)
+	    distance = 150;
+
+	// Avoid any weird sudden spikes - random values seem to appear from time to time that are way above or below the
+	// current filtered state - if we get one of those, just add or subtract a little but to the current filtered state
+	// to prevent the erroneous value from throwing off the filter.
+//	int prevDistance = distanceFilter1.GetValue();
+//	if (distance > prevDistance + 50)
+//	    distance = prevDistance + 10;
+//	else if (distance < prevDistance - 50)
+//		distance = prevDistance - 10;
+
+	distanceFilter1.update(distance);
+	distance1 = distanceFilter1.GetValue();
     }
     else if (!strcmp(msgType, "DIS2"))
     {
@@ -520,10 +534,10 @@ void SetMotorSpeed(int motor, int speed)
 void SetServoAngle(int servo, int angle)
 {
     // Make sure we stay in the range 0 < angle < 180
-    if (angle < 0)
-        angle = 0;
-    if (angle > 180)
-        angle = 180;
+    if (angle < -70)
+        angle = -70;
+    if (angle > 60)
+        angle = 60;
 
     char outMsg[256];
     switch (servo)
@@ -632,7 +646,7 @@ void WallFollower(ControlMode *wallFollowerControl)
 }
 
 
-// Detect obstacles subsumption task.  If an onstacle is detected, set active flag to subsume all other tasks.  This
+// Detect obstacles subsumption task.  If an obstacle is detected, set active flag to subsume all other tasks.  This
 // will generally be the highest priority task (except for manual control), since we always want to avoid obstacles
 // regardless of what other tasks are active.
 void DetectObstacles(ControlMode *detectObstaclesControl)
@@ -813,7 +827,7 @@ void ManualControl(ControlMode *manualControl)
     char val[256];
     ParseMessage(buf, msgType, val);
 
-    if (!strcmp(msgType, "M"))
+    if (!strcmp(msgType, "M"))    // Motors
     {
         char *leftVal = strtok(val, ",");
         char *rightVal = strtok(0, ",");
@@ -821,30 +835,35 @@ void ManualControl(ControlMode *manualControl)
         int right = strtol(rightVal, 0, 10);
         manualPowerLeft = left;
         manualPowerRight = right;
+        autonomous = false;
+	leftWallFollowMode = false;
+	rightWallFollowMode = false;
+
+	// Adjust the Pan/Tilt servos slightly in the direction we're turning to make it easier to see where we're going
+	// This might require some fine-tuning
         panServo = manualServoPan + ((manualPowerLeft - manualPowerRight) * 0.10);
         if (panServo < PAN_MIN)
             panServo = PAN_MIN;
         if (panServo > PAN_MAX)
             panServo = PAN_MAX;
-        autonomous = false;
-	leftWallFollowMode = false;
-	rightWallFollowMode = false;
+        SetServoAngle(PAN_SERVO, panServo);
+        SetServoAngle(TILT_SERVO, tiltServo);
     }
-    else if (!strcmp(msgType, "A"))
+    else if (!strcmp(msgType, "A"))   // Autonomous mode (deprecated)
     {
         manualPowerLeft = 0;
         manualPowerRight = 0;
         autonomous = true;
     }
-    else if (!strcmp(msgType, "W"))
+    else if (!strcmp(msgType, "W"))   // Wall follower mode (W:L or W:R)
     {
 	if (!strcmp(val, "L"))
 	{
 	    leftWallFollowMode = true;
 	    rightWallFollowMode = false;
 	    manualControl->active = false;
-	    manualServoPan = 40;
-	    manualServoTilt = 130;
+	    manualServoPan = -60;
+	    manualServoTilt = 0;
 	    SetServoAngle(PAN_SERVO, manualServoPan);
 	    SetServoAngle(TILT_SERVO, manualServoTilt);
 	}
@@ -853,13 +872,13 @@ void ManualControl(ControlMode *manualControl)
 	    leftWallFollowMode = false;
 	    rightWallFollowMode = true;
 	    manualControl->active = false;
-	    manualServoPan = 160;
-	    manualServoTilt = 130;
+	    manualServoPan = 60;
+	    manualServoTilt = 0;
 	    SetServoAngle(PAN_SERVO, manualServoPan);
 	    SetServoAngle(TILT_SERVO, manualServoTilt);
 	}
     }
-    else if (!strcmp(msgType, "MOT"))
+    else if (!strcmp(msgType, "MOT"))   // Motion detector mode
     {
 	bool on = strtol(val, 0, 10);
 	if (on == 1)
@@ -871,7 +890,11 @@ void ManualControl(ControlMode *manualControl)
 		if(motPID == 0)
 		{
 		    // Child process
-		    execl("./mdetect", "./mdetect", (char *)0);
+		    char panStr[32];
+		    char tiltStr[32];
+		    sprintf(panStr, "%d", panServo);
+		    sprintf(tiltStr, "%d", tiltServo);
+		    execl("./mdetect", "./mdetect", panStr, tiltStr, (char *)0);
 		    _exit(0);
 		}
 	    }
@@ -881,7 +904,7 @@ void ManualControl(ControlMode *manualControl)
 	    kill(motPID, SIGKILL);
 	}
     }
-    else if (!strcmp(msgType, "PT"))
+    else if (!strcmp(msgType, "PT"))   // Pan/Tilt servo
     {
         char *panVal = strtok(val, ",");
         char *tiltVal = strtok(0, ",");
@@ -891,7 +914,8 @@ void ManualControl(ControlMode *manualControl)
         if (panServoVal > PAN_MAX)
             panServoVal = PAN_MAX;
 
-        long tiltServoVal = 180 - strtol(tiltVal, 0, 10);
+//        long tiltServoVal = 180 - strtol(tiltVal, 0, 10);
+        long tiltServoVal = strtol(tiltVal, 0, 10);
         if (tiltServoVal < TILT_MIN)
             tiltServoVal = TILT_MIN;
         if (tiltServoVal > TILT_MAX)
@@ -905,29 +929,28 @@ void ManualControl(ControlMode *manualControl)
         SetServoAngle(TILT_SERVO, tiltServoVal);
 //	panTiltTo(panServoVal, tiltServoVal);
     }
-    else if (!strcmp(msgType, "H"))
+    else if (!strcmp(msgType, "H"))   // Steer-to-heading mode
     {
         targetHeading = strtof(val, 0);
         autonomous = true;
     }
-    else if (!strcmp(msgType, "CAL"))
+    else if (!strcmp(msgType, "CAL"))  // Calibrate sensors (deprecated)
     {
         CalibrateSensors();
     }
-    else if (!strcmp(msgType, "RW"))
+    else if (!strcmp(msgType, "RW"))  // Re-read waypoints file
     {
-	// Re-read waypoints file
 	ReadWaypointsFile();
 	currentWaypoint = 0;
     }
-    else if (!strcmp(msgType, "WPT"))
+    else if (!strcmp(msgType, "WPT"))   //Next waypoint
     {
         char *valStr = strtok(val, ",");
         int val = strtol(valStr, 0, 10);
         if ((currentWaypoint + val) < waypointCount && (currentWaypoint + val) >= 0)
 	    currentWaypoint += val;
     }
-    else if (!strcmp(msgType, "CAT"))
+    else if (!strcmp(msgType, "CAT"))  // Cat toy mode
     {
 	catMode = strtol(val, 0, 10);
 	catModeCtrl.intervalX = 1;
@@ -939,18 +962,18 @@ void ManualControl(ControlMode *manualControl)
 	sprintf(outMsg, "R1:%d\r", catMode);
 	write(fdSerial, outMsg, strlen(outMsg));
     }
-    else if (!strcmp(msgType, "LAS"))
+    else if (!strcmp(msgType, "LAS"))  // Laser on/off
     {
 	int value = strtol(val, 0, 10);
 	char outMsg[256];
 	sprintf(outMsg, "R1:%d\r", value);
 	write(fdSerial, outMsg, strlen(outMsg));
     }
-    else if (!strcmp(msgType, "SCN"))
+    else if (!strcmp(msgType, "SCN"))   // Scan mode on/off
     {
 	scanMode = strtol(val, 0, 10);
     }
-    else if (!strcmp(msgType, "ROT"))
+    else if (!strcmp(msgType, "ROT"))   // Rotate n degrees
     {
 	autonomous = false;
         int degrees = strtol(val, 0, 10);
@@ -1051,7 +1074,7 @@ void ProcessSubsumptionTasks()
     if (scanMode)
     {
 	panServo += scanInterval;
-	if (panServo > PAN_MAX || panServo < 10)
+	if (panServo > PAN_MAX || panServo < -70)
 	{
 	    scanInterval = -scanInterval;
 	    panServo += scanInterval;
@@ -1400,7 +1423,7 @@ void *IMUThread(void *)
 	//  poll at the rate recommended by the IMU
 
 //	usleep(imu->IMUGetPollInterval() * 1000);
-	usleep(100000);
+	usleep(96500);
 	while (imu->IMURead())
 	{
 	    RTIMU_DATA imuData = imu->getIMUData();
@@ -1410,7 +1433,7 @@ void *IMUThread(void *)
 
 	    //  display 10 times per second
 
-	    if ((now - displayTimer) > 100000)
+	    if ((now - displayTimer) > 96500)
 	    {
 //		printf("Sample rate %d: %s\r", sampleRate, RTMath::displayDegrees("", imuData.fusionPose));
 		fflush(stdout);
@@ -1962,13 +1985,13 @@ void panTiltTo(long pan, long tilt)
 
 	// Safety measures - this should never happen.  If any of these conditions are met, something has gone wrong.
 	// Break out of the loop so we don't burn up the servos
-	if (panInterval == -1 && panServo < 10)
+	if (panInterval == -1 && panServo < -60)
 	    break;
-	if (panInterval == 1 && panServo > 160)
+	if (panInterval == 1 && panServo > 60)
 	    break;
-	if (tiltInterval == -1 && tiltServo < 20)
+	if (tiltInterval == -1 && tiltServo < -40)
 	    break;
-	if (tiltInterval == 1 && tiltServo > 160)
+	if (tiltInterval == 1 && tiltServo > 40)
 	    break;
     }
 }
@@ -1978,7 +2001,7 @@ void giveGreeting()
     // Turn toward the kitchen
     int savedPan = panServo;
     int savedTilt = tiltServo;
-    panTiltTo(43, 120);
+    panTiltTo(-60, 20);
 
     char greeting[256];
     strcpy(greeting, "Good morning, humans.");
@@ -2276,9 +2299,9 @@ int main(int argc, char **argv)
 	    }
 
 
-            printf("Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
-            printf("Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
-            printf("Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
+            printf("Distance1: %dcm\n", distance1);
+            printf("Distance2: %dcm\n", distance2);
+            printf("Distance3: %dcm\n", distance3);
             printf("Light Intensity: %3.2f\n", lightIntensity);
             printf("LED: %s\n", led ? "ON" : "OFF");
 	    printf("Wall PID output: %f\n", wallPIDOutput);
@@ -2318,9 +2341,18 @@ int main(int argc, char **argv)
 		}
 	    }
 
-            fprintf(outFile, "Distance1: %c%dcm\n", distance1 == 100 ? '>' : '\0', distance1);
-            fprintf(outFile, "Distance2: %c%dcm\n", distance2 == 100 ? '>' : '\0', distance2);
-            fprintf(outFile, "Distance3: %c%dcm\n", distance3 == 100 ? '>' : '\0', distance3);
+//	    if (distance1 >= 100)
+//		fprintf(outFile, "Distance1: >100cm\n");
+//	    else
+                fprintf(outFile, "Distance1: %dcm\n", distance1);
+//	    if (distance2 >= 100)
+//		fprintf(outFile, "Distance2: >100cm\n");
+//	    else
+                fprintf(outFile, "Distance2: %dcm\n", distance2);
+//	    if (distance3 >= 100)
+//		fprintf(outFile, "Distance3: >100cm\n");
+//	    else
+                fprintf(outFile, "Distance3: %dcm\n", distance3);
 	    fprintf(outFile, "GyroX: %c%2.2f\n", xGyroFilter.GetValue() >= 0 ? ' ' : ' ', xGyroFilter.GetValue());
 	    fprintf(outFile, "GyroY: %c%2.2f\n", yGyroFilter.GetValue() >= 0 ? ' ' : ' ', yGyroFilter.GetValue());
 	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : ' ', zGyroFilter.GetValue());

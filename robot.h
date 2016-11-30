@@ -18,19 +18,26 @@
 // Constants for the pan/tilt camera servos
 #define PAN_SERVO 1
 #define TILT_SERVO 2
-#define PAN_MIN -40
-#define PAN_MAX 160
-#define TILT_MIN 20
-#define TILT_MAX 165
-#define PAN_MID 100 /*90*/
-#define TILT_MID 130
+//#define PAN_MIN -40
+//#define PAN_MAX 160
+//#define TILT_MIN 20
+//#define TILT_MAX 165
+//#define PAN_MID 100 /*90*/
+//#define TILT_MID 130
+#define PAN_MIN -90
+#define PAN_MAX 60
+#define TILT_MIN -60
+#define TILT_MAX 60
+#define PAN_MID 0 /*90*/
+#define TILT_MID 0
+
 
 struct CatModeCtrl
 {
-    static const int maxX = 160;
-    static const int minX = 20;
-    static const int maxY = 165;
-    static const int minY = 140;
+    static const int maxX = 50;
+    static const int minX = -50;
+    static const int maxY = -30;
+    static const int minY = -60;
     int x;
     int y;
     int intervalX;

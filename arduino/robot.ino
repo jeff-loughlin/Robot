@@ -1,4 +1,5 @@
 #include <Servo.h>
+#include <NewPing.h>
 
 void readCommand(char *command);
 void SteerToHeading();
@@ -41,6 +42,10 @@ int servo3_pin = 9;   // Connected to pin 9 (PWM)
 #define DIST_SENSOR2_ECHO_PIN A2
 #define DIST_SENSOR3_TRIGGER_PIN A5
 #define DIST_SENSOR3_ECHO_PIN A4
+
+NewPing distSensor1(DIST_SENSOR1_TRIGGER_PIN, DIST_SENSOR1_ECHO_PIN, 150);
+NewPing distSensor2(DIST_SENSOR2_TRIGGER_PIN, DIST_SENSOR2_ECHO_PIN, 150);
+NewPing distSensor3(DIST_SENSOR3_TRIGGER_PIN, DIST_SENSOR3_ECHO_PIN, 150);
 
 #define VOLTAGE_SENSOR1_PIN A6
 
@@ -89,12 +94,12 @@ void setup()
     servo3.attach(servo3_pin);
 
     // Set up the distance sensor pins
-    pinMode(DIST_SENSOR1_TRIGGER_PIN, OUTPUT);
-    pinMode(DIST_SENSOR1_ECHO_PIN, INPUT);
-    pinMode(DIST_SENSOR2_TRIGGER_PIN, OUTPUT);
-    pinMode(DIST_SENSOR2_ECHO_PIN, INPUT);
-    pinMode(DIST_SENSOR3_TRIGGER_PIN, OUTPUT);
-    pinMode(DIST_SENSOR3_ECHO_PIN, INPUT);
+//    pinMode(DIST_SENSOR1_TRIGGER_PIN, OUTPUT);
+//    pinMode(DIST_SENSOR1_ECHO_PIN, INPUT);
+//    pinMode(DIST_SENSOR2_TRIGGER_PIN, OUTPUT);
+//    pinMode(DIST_SENSOR2_ECHO_PIN, INPUT);
+//    pinMode(DIST_SENSOR3_TRIGGER_PIN, OUTPUT);
+//    pinMode(DIST_SENSOR3_ECHO_PIN, INPUT);
 
     // Set up the voltage sensor pin
     pinMode(VOLTAGE_SENSOR1_PIN, INPUT);
@@ -172,19 +177,22 @@ void loop()
             // Reset the beacon timer.  If we don't get a LED message within 2 seconds, we'll shut everything down
             beaconTime = millis();
         }
-        else if (!strcmp(msgType, "S3"))
+        else if (!strcmp(msgType, "S3"))  // Tilt Servo
         {
             // Set Servo 3 angle
             int angle = strtol(val, 0, 10);
+	    angle = -angle;
+	    angle += 132;
             servo3.write(angle);
         }
-        else if (!strcmp(msgType, "S2"))
+        else if (!strcmp(msgType, "S2"))  // Pan Servo
         {
             // Set Servo 2 angle
             int angle = strtol(val, 0, 10);
+	    angle += 97;
             servo2.write(angle);
         }
-	else if (!strcmp(msgType, "R1"))
+	else if (!strcmp(msgType, "R1"))  // Relay 1
 	{
 	    int value = strtol(val, 0, 10);
 	    digitalWrite(12, !value);
@@ -230,16 +238,36 @@ void loop()
 
 void GetDistanceReadings(int *distance1, int *distance2, int *distance3)
 {
+    *distance1 = 0;
+    *distance2 = 0;
+    *distance3 = 0;
+    int echoTime = distSensor1.ping_median(3);
+    if (echoTime != NO_ECHO)
+	*distance1 = distSensor1.convert_cm(echoTime);
+
+    return;  /////////////////////////////////////////////////////  Remove This //////////////////////////
+
+    echoTime = distSensor2.ping_median();
+    if (echoTime != NO_ECHO)
+	*distance2 = distSensor2.convert_cm(echoTime);
+
+    echoTime = distSensor3.ping_median();
+    if (echoTime != NO_ECHO)
+	*distance3 = distSensor3.convert_cm(echoTime);
+
+
+#ifdef JUNK
     // Sensor 1
     digitalWrite(DIST_SENSOR1_TRIGGER_PIN, LOW);
     delayMicroseconds(2);
     digitalWrite(DIST_SENSOR1_TRIGGER_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(DIST_SENSOR1_TRIGGER_PIN, LOW);
-    long duration = pulseIn(DIST_SENSOR1_ECHO_PIN, HIGH, 5000);
+    long duration = pulseIn(DIST_SENSOR1_ECHO_PIN, HIGH, 17500);
   
     *distance1 = (duration / 2) / 29.1;
 
+    delay(10);
 
     // Sensor 2
     digitalWrite(DIST_SENSOR2_TRIGGER_PIN, LOW);
@@ -247,20 +275,22 @@ void GetDistanceReadings(int *distance1, int *distance2, int *distance3)
     digitalWrite(DIST_SENSOR2_TRIGGER_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(DIST_SENSOR2_TRIGGER_PIN, LOW);
-    duration = pulseIn(DIST_SENSOR2_ECHO_PIN, HIGH, 5000);
+    duration = pulseIn(DIST_SENSOR2_ECHO_PIN, HIGH, 17500);
   
     *distance2 = (duration / 2) / 29.1;
 
+    delay(10);
 
     // Sensor 3
     digitalWrite(DIST_SENSOR3_TRIGGER_PIN, LOW);
-    delayMicroseconds(2);
+    delayMicroseconds(5);
     digitalWrite(DIST_SENSOR3_TRIGGER_PIN, HIGH);
     delayMicroseconds(10);
     digitalWrite(DIST_SENSOR3_TRIGGER_PIN, LOW);
-    duration = pulseIn(DIST_SENSOR3_ECHO_PIN, HIGH, 5000);
+    duration = pulseIn(DIST_SENSOR3_ECHO_PIN, HIGH, 17500);
   
     *distance3 = (duration / 2) / 29.1;
+#endif
 }
 
 
