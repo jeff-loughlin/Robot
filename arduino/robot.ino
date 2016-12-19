@@ -34,7 +34,7 @@ int IN4=7;    //connected to Arduino's port 7
 
 int servo1_pin = 10;
 int servo2_pin = 11;
-int servo3_pin = 9;   // Connected to pin 9 (PWM) 
+int servo3_pin = 9;
 
 #define DIST_SENSOR1_TRIGGER_PIN A1
 #define DIST_SENSOR1_ECHO_PIN A0
@@ -114,6 +114,19 @@ int switch1 = 0;
 
 long beaconTime = 0;
 
+#ifdef TEST
+void loop()
+{
+    analogWrite(6, 128);
+    digitalWrite(4, 0);
+    digitalWrite(7, 0);
+    delay(2000);
+    digitalWrite(4, 1);
+    digitalWrite(7, 1);
+    delay(2000);
+}
+#endif
+
 void loop()
 {
     // If we haven't received a LED command in the last 1.5 seconds, something has gone horribly wrong.
@@ -129,8 +142,8 @@ void loop()
         char ch = Serial.read();
         if (ch != '\r' && ch != '\n')
         {
-            msg[idx++] = ch;
-//            delay(10);
+	    if (idx < 31)
+                msg[idx++] = ch;
             return;
         }
         msg[idx] = 0;
@@ -231,10 +244,14 @@ void loop()
 	sprintf(outMsg, "VLT1:%d\r", (int)(voltage * 100));
 	Serial.print(outMsg);
 
+
+// Testing
+//	analogWrite(6, 30);
+
+
         lastTime = millis();
     }    
 }
-
 
 void GetDistanceReadings(int *distance1, int *distance2, int *distance3)
 {

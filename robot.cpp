@@ -157,7 +157,7 @@ Kalman pitchFilter(0.125, 4, 1, 0);
 
 Kalman voltageFilter(0.125, 4, 1, 0);
 
-Kalman distanceFilter1(0.125, 4, 1, 0);
+Kalman distanceFilter1(1.125, 4, 1, 0);
 
 //int rotationDegrees = 0;
 
@@ -257,15 +257,7 @@ void ProcessSerialMsg(const char *msg)
 	if (distance == 0)
 	    distance = 150;
 
-	// Avoid any weird sudden spikes - random values seem to appear from time to time that are way above or below the
-	// current filtered state - if we get one of those, just add or subtract a little but to the current filtered state
-	// to prevent the erroneous value from throwing off the filter.
-//	int prevDistance = distanceFilter1.GetValue();
-//	if (distance > prevDistance + 50)
-//	    distance = prevDistance + 10;
-//	else if (distance < prevDistance - 50)
-//		distance = prevDistance - 10;
-
+	// Use a filter on the distance measurement to avoid random jumping around
 	distanceFilter1.update(distance);
 	distance1 = distanceFilter1.GetValue();
     }
@@ -904,7 +896,7 @@ void ManualControl(ControlMode *manualControl)
 	    kill(motPID, SIGKILL);
 	}
     }
-    else if (!strcmp(msgType, "PT"))   // Pan/Tilt servo
+    else if (!strcmp(msgType, "PT") || !strcmp(msgType, "PTT"))   // Pan/Tilt servo
     {
         char *panVal = strtok(val, ",");
         char *tiltVal = strtok(0, ",");
@@ -921,13 +913,19 @@ void ManualControl(ControlMode *manualControl)
         if (tiltServoVal > TILT_MAX)
             tiltServoVal = TILT_MAX;
 
-        manualServoPan = panServoVal;
-        manualServoTilt = tiltServoVal;
-	panServo = panServoVal;
-	tiltServo = tiltServoVal;
-        SetServoAngle(PAN_SERVO, panServoVal);
-        SetServoAngle(TILT_SERVO, tiltServoVal);
-//	panTiltTo(panServoVal, tiltServoVal);
+	if (!strcmp(msgType, "PT"))
+	{
+            manualServoPan = panServoVal;
+            manualServoTilt = tiltServoVal;
+	    panServo = panServoVal;
+	    tiltServo = tiltServoVal;
+            SetServoAngle(PAN_SERVO, panServoVal);
+            SetServoAngle(TILT_SERVO, tiltServoVal);
+	}
+	else
+	{
+	    panTiltTo(panServoVal, tiltServoVal);
+	}
     }
     else if (!strcmp(msgType, "H"))   // Steer-to-heading mode
     {
@@ -1964,8 +1962,20 @@ float getLightLevel()
 #endif
 }
 
-void panTiltTo(long pan, long tilt)
+static bool inPanTilt = false;
+struct PanTiltController
 {
+    long pan;
+    long tilt;
+};
+
+void *panTiltThread(void *threadParam)
+{
+    PanTiltController *p = (PanTiltController *)threadParam;
+    long pan = p->pan;
+    long tilt = p->tilt;
+    delete p;
+
     int panInterval = panServo < pan ? 1 : -1;
     int tiltInterval = tiltServo < tilt ? 1 : -1;
     while (panServo != pan || tiltServo != tilt)
@@ -1977,11 +1987,13 @@ void panTiltTo(long pan, long tilt)
 
         panServo += panInterval;
 	tiltServo += tiltInterval;
+        manualServoPan = panServo;
+        manualServoTilt = tiltServo;
 
 	SetServoAngle(PAN_SERVO, panServo);
-	usleep(10000);
+	usleep(20000);
 	SetServoAngle(TILT_SERVO, tiltServo);
-	usleep(10000);
+	usleep(20000);
 
 	// Safety measures - this should never happen.  If any of these conditions are met, something has gone wrong.
 	// Break out of the loop so we don't burn up the servos
@@ -1994,7 +2006,23 @@ void panTiltTo(long pan, long tilt)
 	if (tiltInterval == 1 && tiltServo > 40)
 	    break;
     }
+    inPanTilt = false;
+    return 0;
 }
+
+void panTiltTo(long pan, long tilt)
+{
+    if (inPanTilt)
+	return;
+    inPanTilt = true;
+
+    PanTiltController *p = new PanTiltController;
+    p->pan = pan;
+    p->tilt = tilt;
+    pthread_t panTiltThreadId;
+    pthread_create(&panTiltThreadId, NULL, panTiltThread, p);
+}
+
 
 void giveGreeting()
 {
@@ -2306,6 +2334,15 @@ int main(int argc, char **argv)
             printf("LED: %s\n", led ? "ON" : "OFF");
 	    printf("Wall PID output: %f\n", wallPIDOutput);
 	    printf("Main Bus Voltage: %2.2fV\n", voltage1);
+
+	    // Get CPU temperature
+	    FILE *temperatureFile = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
+	    char temperatureStr[32];
+	    fgets(temperatureStr, sizeof(temperatureStr), temperatureFile);
+	    fclose (temperatureFile);
+	    int cpuTemperature = atoi(temperatureStr) / 1000;
+	    printf("CPU Temperature: %dC\n", cpuTemperature);
+
 //	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
 //	    printf("Dark: %s\n", inTheDark?"true":"false");
 //	    printf("Dark timer: %lu\n", timeInDark);
@@ -2358,6 +2395,7 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : ' ', zGyroFilter.GetValue());
 	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
 	    fprintf(outFile, "Main Bus Voltage: %2.2fV\n", voltage1);
+	    fprintf(outFile, "CPU Temperature: %d\n", cpuTemperature);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 	    fprintf(outFile, "Timestamp: %lld\n", current_timestamp());
 

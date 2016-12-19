@@ -160,19 +160,39 @@ el.style.left = evt.layerX + 'px';
                               }
                     }();
 
+
+function motorTouchMove(event)
+{
+    event.preventDefault();
+    motorMouseMove(event);
+}
+
+function motorTouchStart(event)
+{
+    event.preventDefault();
+    motorMouseDown(event);
+}
+
+function motorTouchEnd(event)
+{
+    event.preventDefault();
+    motorMouseUp();
+}
+
 var motorControlActive = false;
-function motorMouseDown()
+
+function motorMouseDown(event)
 {
     motorControlActive = true;
-//    x = event.clientX - 266;  // Swap L/R motors
-    x = 266 - event.clientX;
-    y = 222 - event.clientY;
+//    x = 266 - event.clientX;
+//    y = 222 - event.clientY;
+    x = 251 - event.layerX; //clientX;
+    y = 192 - event.layerY; //clientY;
 
     if (x > 128) x = 128;
     if (x < -127) x = -127;
     if (y > 128) y = 128;
     if (y < -127) y = -127;
-//    document.getElementById('coords').innerHTML = "Motors: x=" + x + ", y=" + y;
     callPHP_motors('x=' + x + '&y=' + y);
 
     wallFollowModeLeft = false;
@@ -183,16 +203,15 @@ function motorMouseMove(event)
 {
     if (motorControlActive)
     {
-//	x = event.clientX - 266;  // Swap L/R motors
-	x = 266 - event.clientX;
-	y = 222 - event.clientY;
+//	x = 266 - event.layerX; //clientX;
+	x = 251 - event.layerX; //clientX;
+//	y = 222 - event.layerY; //clientY;
+	y = 192 - event.layerY; //clientY;
 	if (x > 128) x = 128;
 	if (x < -127) x = -127;
 	if (y > 128) y = 128;
 	if (y < -127) y = -127;
         callPHP_motors('x=' + x + '&y=' + y);
-
-//        document.getElementById('coords').innerHTML = 'Motors: x=' + x + ', y=' + y;
     }
 }
 
@@ -203,6 +222,23 @@ function motorMouseUp()
 }
 
 var panTiltGrabbed = false;
+
+function touchMove(event)
+{
+    event.preventDefault();
+    movePanTilt(event);
+}
+
+function touchStart(event)
+{
+    event.preventDefault();
+    grabPanTilt(event);
+}
+
+function touchEnd(event)
+{
+    releasePanTilt();
+}
 
 function grabPanTilt(evt)
 {
@@ -297,7 +333,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <!-- Pan/Tilt servo control element (crosshairs) -->
 <div style="position:absolute; top:30px; left:550px">
 <div id='pantiltPtr' style="position:absolute; top:92px; left:92px;" ></div>
-<img draggable="false" style="width:200px; height:200px; opacity: 0.5;" src="crosshairs-400x400.png" id="pantilt" onmousedown='grabPanTilt(event);' onmousemove='movePanTilt(event);' onmouseup='releasePanTilt();' onmouseout='releasePanTilt();' ondragstart='return false;'/>
+<img draggable="false" style="width:200px; height:200px; opacity: 0.5;" src="crosshairs-400x400.png" id="pantilt" onmousedown='grabPanTilt(event);' onmousemove='movePanTilt(event);' onmouseup='releasePanTilt();' onmouseout='releasePanTilt();' ondragstart='return false;' ontouchstart='touchStart(event);' ontouchmove='touchMove(event);' ontouchend='touchEnd(event);' ontouchcancel='touchEnd(event);' />
 <div style="position:absolute; top:0px; left:0px; font-size:8pt;">Pan/Tilt:</div>
 <div id="panTiltText" style="position:absolute; top:0px; left:45px; font-size:8pt;"></div>
 <div style="position:absolute; top: 220px; left:0px; width:35px"><button onclick='lookLeft()'>Look Left</button></div>
@@ -321,7 +357,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 
 <!-- Motor control element (crosshairs superimposed on video feed) -->
 <img src="compass-640x480.png" id="compass" style="position:absolute; top:35px; left:15px; width:500px; height:375px"/>
-<img onmousedown='motorMouseDown();' onmousemove='motorMouseMove(event);' onmouseup='motorMouseUp();' draggable="false" ondragstart="return false;" src="crosshairs-640x480.png" style="opacity:0.5; position:absolute; top:35px; left:15px; height:375px; width:500px"/>
+<img onmousedown='motorMouseDown(event);' onmousemove='motorMouseMove(event);' onmouseup='motorMouseUp();' draggable="false" ondragstart="return false;" ontouchstart='motorTouchStart(event);' ontouchmove='motorTouchMove(event);' ontouchend='motorTouchEnd(event);' ontouchcancel='motorTouchEnd(event);'  src="crosshairs-640x480.png" style="opacity:0.5; position:absolute; top:35px; left:15px; height:375px; width:500px"/>
 
 <!-- Telemetry data -->
 <div id="data" style="align:center; width:875px; height:800px; position:absolute; top:980px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
@@ -384,7 +420,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 </div>
 
 <!-- Function Buttons -->
-<div style="position:absolute; top:130px; left:120px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="position:absolute; top:130px; left:110px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <table>
   <tr>
     <td><input id="laserButton" type="button" value="Laser On" onClick="laserButtonClicked()" style="width:150px"/></td>
@@ -426,7 +462,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <div style="align:center; width:500px; height:460px; position:absolute; top:10px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 
 <!-- Gyro meters -->
-<div style="width:70px; height:120px; position:absolute; top:10px; left:70px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; height:120px; position:absolute; top:10px; left:15px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <div style="width:70px; text-align:center;">Gyros</div>
 <span style="position:absolute; left:-25px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroXMeter" value="0" min="0" max="20" low="5" high="10" optimum="0"></span>
 <span style="position:absolute; left:-5px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroYMeter" value="0" min="0" max="20" low="5" high="10" optimum="0"></span>
@@ -437,20 +473,20 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 </div>
 
 <!-- Control mode indicators -->
-<div style="width:130px; height:125px; position:absolute; top:10px; left:195px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
-<div style="width:130px; text-align:center;">Control Mode</div>
+<div style="width:100px; height:125px; position:absolute; top:310px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:100px; text-align:center; font-size:9pt">Control Mode</div>
 <table style="margin:auto; width:75px; horizontal-align:center; text-align:center">
-  <tr><td colspan="2" id="manualModeIndicator" style="font-size:10pt; width:50px; background-color:green">Manual</td></tr>
-  <tr><td id="wallModeIndicatorL" style="font-size:10pt; width:50px; background-color:red">Wall(L)</td>
-      <td id="wallModeIndicatorR" style="font-size:10pt; width:50px; background-color:red">Wall(R)</td></tr>
-  <tr><td colspan="2" id="headingModeIndicator" style="font-size:10pt; width:50px; background-color:red">Heading</td></tr>
-  <tr><td colspan="2" id="motionDetectorModeIndicator" style="font-size:10pt; width:50px; background-color:red">Motion Detect</td></tr>
-  <tr><td colspan="2" id="scanModeIndicator" style="font-size:10pt; width:50px; background-color:red">Scan</td></tr>
+  <tr><td colspan="2" id="manualModeIndicator" style="font-size:8pt; width:50px; background-color:green">Manual</td></tr>
+  <tr><td id="wallModeIndicatorL" style="font-size:9pt; width:50px; background-color:red">Wall(L)</td>
+      <td id="wallModeIndicatorR" style="font-size:9pt; width:50px; background-color:red">Wall(R)</td></tr>
+  <tr><td colspan="2" id="headingModeIndicator" style="font-size:9pt; width:50px; background-color:red">Heading</td></tr>
+  <tr><td colspan="2" id="motionDetectorModeIndicator" style="font-size:9pt; width:50px; background-color:red">Motion Detect</td></tr>
+  <tr><td colspan="2" id="scanModeIndicator" style="font-size:9pt; width:50px; background-color:red">Scan</td></tr>
 </table>
 </div>
 
 <!-- Motor meters -->
-<div style="width:70px; height:120px; position:absolute; top:10px; left:385px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:70px; height:120px; position:absolute; top:10px; left:410px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <div style="width:70px; text-align:center;">Motors</div>
 <span style="position:absolute; left:7px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="leftMotorMeterPos" value="0" min="0.0" max="75.0"></span>
 <span style="position:absolute; left:27px; top:33px;"><meter style="width:40px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="rightMotorMeterPos" value="0" min="0.0" max="75.0"></span>
@@ -461,16 +497,17 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 </div>
 
 <!-- Battery and attitude indicators -->
-<div style="position:absolute; top:140px; left:105px;">
+<div style="position:absolute; top:150px; left:100px;">
 <span id="attitude"></span>
 <span id="battery"></span>
 </div>
 
 <!-- Battery and Light meters -->
-<div style="position:absolute; top:340px; left:100px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="position:absolute; top:30px; left:135px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px; font-size:9pt">
 <table>
-<tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16" high="13" low="11" optimum="14"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
+<tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16" high="11.8" low="11" optimum="14"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
 <tr><td align="right">Secondary Bus Voltage:</td><td><meter id="voltageMeter2" value="5" min="0" max="16.0" high="7.0" low="3.0" optimum="5.0"></meter></td><td align="right"><span id="voltageText2">5.0V</span></td></tr>
+<tr><td align="right">CPU Core Temperature:</td><td><meter id="cpuTemperatureMeter" value="0" min="0" max="100.0" high="60" optimum="50"></meter></td><td align="right"><span id="cpuTemperatureText">0.0</span></td></tr>
 <tr><td align="right">Light Intensity:</td><td><meter id="lightIntensityMeter" value="0" min="0" max="100.0"></meter></td><td align="right"><span id="lightIntensityText">0.0</span></td></tr>
 </table>
 </div>
@@ -481,18 +518,18 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 
 
 <!-- Comms Indicator -->
-<div style="position:absolute; top:433px; left:180px;">Comm Status:</div>
-<div id="commsIndicator" style="position:absolute; top:438px; left:280px; border-style:solid; border-width:1px; border-color:gray; border-radius:5px; width:9px; height:9px; background-color:red"></div>
+<div style="position:absolute; top:438px; left:180px;">Comm Status:</div>
+<div id="commsIndicator" style="position:absolute; top:443px; left:280px; border-style:solid; border-width:1px; border-color:gray; border-radius:5px; width:9px; height:9px; background-color:red"></div>
 </div>
 
 <!-- Turn indicator -->
-<div style = "position:absolute; top:300px; left:220px; width:100px; height:1px; border:1px solid black;">
+<div style = "position:absolute; top:320px; left:210px; width:100px; height:1px; border:1px solid black;">
     <div style="position:absolute; top:-7px;left:50px; width:0px; height:13px; border:1px solid black;"></div>
     <div id="turnIndicator" style="position:absolute; top:-5px; left:45px; background-color:red; width:11px; height:11px; border-radius:5px"></div>
 </div>
 
 <!-- Turn PID indicator -->
-<div style = "position:absolute; top:325px; left:220px; width:100px; height:1px; border:1px solid black;">
+<div style = "position:absolute; top:345px; left:210px; width:100px; height:1px; border:1px solid black;">
     <div style="position:absolute; top:-7px;left:50px; width:0px; height:13px; border:1px solid black;"></div>
     <div id="turnPIDIndicator" style="position:absolute; top:-5px; left:45px; background-color:red; width:11px; height:11px; border-radius:5px"></div>
 </div>
@@ -740,21 +777,21 @@ function resetPanTilt()
 {
 //    document.getElementById('pantiltPtr').style.top = "92px";
 //    document.getElementById('pantiltPtr').style.left = "92px";
-    sendCommand('PT:'+panCenter+','+tiltCenter);
+    sendCommand('PTT:'+panCenter+','+tiltCenter);
 }
 
 function lookLeft()
 {
 //    document.getElementById('pantiltPtr').style.top = "92px";
 //    document.getElementById('pantiltPtr').style.left = "42px";
-    sendCommand('PT:'+lookLeftPan+','+tiltCenter);
+    sendCommand('PTT:'+lookLeftPan+','+tiltCenter);
 }
 
 function lookRight()
 {
 //    document.getElementById('pantiltPtr').style.top = "92px";
 //    document.getElementById('pantiltPtr').style.left = "142px";
-    sendCommand('PT:'+lookRightPan+','+tiltCenter);
+    sendCommand('PTT:'+lookRightPan+','+tiltCenter);
 }
 
 function callPHP_getData()
@@ -895,6 +932,9 @@ function formatTelemetryData(data)
     else
 	document.getElementById('lightIntensityText').style.color = "black";
 
+    // Update the CPU temperature meter
+    document.getElementById('cpuTemperatureMeter').value = telemetry["CPU Temperature"];
+    document.getElementById('cpuTemperatureText').innerText = telemetry["CPU Temperature"] + "\u00b0C";
 
     // Update the gyro meters
     document.getElementById('gyroXMeter').value = Math.abs(telemetry["GyroX"]);
