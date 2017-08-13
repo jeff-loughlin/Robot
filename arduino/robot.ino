@@ -1,5 +1,6 @@
 #include <Servo.h>
 #include <NewPing.h>
+#include <avr/power.h>
 
 void readCommand(char *command);
 void SteerToHeading();
@@ -11,6 +12,7 @@ void calibrateMagSensor();
 void stopMotor(int motor);
 
 void SetMotorSpeed(int motor, int speed);
+long readVcc();
 
 
 // Servos
@@ -36,12 +38,12 @@ int servo1_pin = 10;
 int servo2_pin = 11;
 int servo3_pin = 9;
 
-#define DIST_SENSOR1_TRIGGER_PIN A1
-#define DIST_SENSOR1_ECHO_PIN A0
+#define DIST_SENSOR1_TRIGGER_PIN A0
+#define DIST_SENSOR1_ECHO_PIN A1
 #define DIST_SENSOR2_TRIGGER_PIN A3
 #define DIST_SENSOR2_ECHO_PIN A2
-#define DIST_SENSOR3_TRIGGER_PIN A5
-#define DIST_SENSOR3_ECHO_PIN A4
+#define DIST_SENSOR3_TRIGGER_PIN A4
+#define DIST_SENSOR3_ECHO_PIN A5
 
 NewPing distSensor1(DIST_SENSOR1_TRIGGER_PIN, DIST_SENSOR1_ECHO_PIN, 150);
 NewPing distSensor2(DIST_SENSOR2_TRIGGER_PIN, DIST_SENSOR2_ECHO_PIN, 150);
@@ -244,6 +246,12 @@ void loop()
 	sprintf(outMsg, "VLT1:%d\r", (int)(voltage * 100));
 	Serial.print(outMsg);
 
+	// Get the Vcc voltage from the AVR
+	// Send it to the controller
+	long vcc = readVcc();
+	sprintf(outMsg, "VCC:%d\r", (int)vcc);
+	Serial.print(outMsg);
+
 
 // Testing
 //	analogWrite(6, 30);
@@ -252,6 +260,27 @@ void loop()
         lastTime = millis();
     }    
 }
+
+long readVcc()
+{ 
+   // Read 1.1V reference against AVcc 
+   // set the reference to Vcc and the measurement to the internal 1.1V reference 
+   ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1); 
+   
+   delay(2); // Wait for Vref to settle 
+   ADCSRA |= _BV(ADSC); // Start conversion 
+   while (bit_is_set(ADCSRA,ADSC)); // measuring 
+   
+   uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH   
+   uint8_t high = ADCH; // unlocks both 
+   
+   long result = (high<<8) | low; 
+   
+//   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000 
+   result = 1214300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000 
+   return result; // Vcc in millivolts
+} 
+
 
 void GetDistanceReadings(int *distance1, int *distance2, int *distance3)
 {
@@ -262,13 +291,11 @@ void GetDistanceReadings(int *distance1, int *distance2, int *distance3)
     if (echoTime != NO_ECHO)
 	*distance1 = distSensor1.convert_cm(echoTime);
 
-    return;  /////////////////////////////////////////////////////  Remove This //////////////////////////
+//    echoTime = distSensor2.ping_median(3);
+//    if (echoTime != NO_ECHO)
+//	*distance2 = distSensor2.convert_cm(echoTime);
 
-    echoTime = distSensor2.ping_median();
-    if (echoTime != NO_ECHO)
-	*distance2 = distSensor2.convert_cm(echoTime);
-
-    echoTime = distSensor3.ping_median();
+    echoTime = distSensor3.ping_median(3);
     if (echoTime != NO_ECHO)
 	*distance3 = distSensor3.convert_cm(echoTime);
 

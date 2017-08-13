@@ -7,7 +7,7 @@
 #define BAUDRATE B115200
 
 #define MAX_SPEED 150
-#define NORMAL_SPEED 50
+#define NORMAL_SPEED 30
 #define LEFT_MOTOR 0
 #define RIGHT_MOTOR 1
 

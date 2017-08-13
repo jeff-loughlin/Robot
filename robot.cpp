@@ -31,8 +31,8 @@ float AA = 0.98; // complementary filter constant
 const int CAL_SAMPLES = 10;
 
 
-const float rollOffset = -0.4;
-const float pitchOffset = 3.3;
+float rollOffset = 0.0; //-0.4;
+float pitchOffset = 0.0; // 3.3;
 
 
 // Mag calibration constants
@@ -104,6 +104,8 @@ int gyroDeltaT;
 unsigned long gyroDeltaT_t;
 float voltage1;
 unsigned long voltage1_t;
+float voltage2;
+unsigned long voltage2_t;
 
 // Say "ouch" when bumped
 bool ouchEnabled = true;
@@ -156,6 +158,7 @@ Kalman rollFilter(0.125, 4, 1, 0);
 Kalman pitchFilter(0.125, 4, 1, 0);
 
 Kalman voltageFilter(0.125, 4, 1, 0);
+Kalman voltage2Filter(0.125, 4, 1, 0);
 
 Kalman distanceFilter1(1.125, 4, 1, 0);
 
@@ -167,7 +170,7 @@ PID headingPID(&headingPIDInput, &headingPIDOutput, &targetHeading,1,0,0, DIRECT
 
 // PID controller variables for wall follower (distance from wall)
 double SetDistance, wallPIDInput, wallPIDOutput;
-PID wallFollowerPID(&wallPIDInput, &wallPIDOutput, &SetDistance, 5, 0, 0, DIRECT);
+PID wallFollowerPID(&wallPIDInput, &wallPIDOutput, &SetDistance, 10, 0, 0, DIRECT);
 
 // PID controller variables for manual control
 double SetGyro, gyroPIDInput, gyroPIDOutput;
@@ -291,6 +294,13 @@ void ProcessSerialMsg(const char *msg)
 	voltageFilter.update(v);
 	voltage1 = voltageFilter.GetValue();
         voltage1_t = millis();
+    }
+    else if (!strcmp(msgType, "VCC"))
+    {
+        float v = strtof(val, 0) / 1000;
+	voltage2Filter.update(v);
+	voltage2 = voltage2Filter.GetValue();
+        voltage2_t = millis();
     }
 }
 
@@ -621,16 +631,19 @@ void SteerToHeading(ControlMode *steerToHeadingControl)
 // to follow a wall at distance WALL_FOLLOWER_DISTANCE
 void WallFollower(ControlMode *wallFollowerControl)
 {
-    wallPIDInput = distance1;
-    wallFollowerPID.Compute();
-
     if (leftWallFollowMode)
     {
+	wallPIDInput = distance1;
+	wallFollowerPID.Compute();
+
 	wallFollowerControl->leftMotorPower = NORMAL_SPEED + wallPIDOutput;
-	wallFollowerControl->rightMotorPower = NORMAL_SPEED - wallPIDOutput;
+	wallFollowerControl->rightMotorPower = NORMAL_SPEED - wallPIDOutput * 2;
     }
     else if (rightWallFollowMode)
     {
+	wallPIDInput = distance2;
+	wallFollowerPID.Compute();
+
 	wallFollowerControl->leftMotorPower = NORMAL_SPEED - wallPIDOutput;
 	wallFollowerControl->rightMotorPower = NORMAL_SPEED + wallPIDOutput;
     }
@@ -700,82 +713,8 @@ void CalculateDistanceToWaypoint()
 
 void CalibrateSensors()
 {
-        printf("\nEntering calibration mode\n");
-        printf("Place on a flat level surface\n\n");
-
-        // Now calibrate the gyros and accelerometers
-        int xg = 0;
-        int yg = 0;
-        int zg = 0;
-        int ax = 0;
-        int ay = 0;
-        int az = 0;
-        gyroXCal = 0;
-        gyroYCal = 0;
-        gyroZCal = 0;
-        accelXCal = 0;
-        accelYCal = 0;
-        accelZCal = 980;
-        for (int i = 0; i < 100; i++)
-        {
-            xg += gyroX;
-            yg += gyroY;
-            zg += gyroZ;
-            ax += accelX;
-            ay += accelY;
-            az += accelZ;
-            usleep(100000);
-        }
-
-        gyroXCal = xg / 100;
-        gyroYCal = yg / 100;
-        gyroZCal = zg / 100;
-
-#ifdef JUNK_FOR_NOW  // Commenting out for now so can calibrate other sensors without messing up the mag calibration
-        accelXCal = ax / 100;
-        accelYCal = ay / 100;
-        accelZCal = az / 100;
-
-        printf("Rotate through all axes X-Y-Z\n");
-        xMin = 9999;
-        xMax = -9999;
-        yMin = 9999;
-        yMax = -9999;
-        zMin = 9999;
-        zMax = -9999;
-        for (int i = 0; i < 100; i++)
-        {
-            if (magX > xMax)
-	            xMax = magX;
-	        if (magX < xMin)
-	            xMin = magX;
-            if (magY > yMax)
-                yMax = magY;
-            if (magY < yMin)
-                yMin = magY;
-            if (magZ > zMax)
-                zMax = magZ;
-            if (magZ < zMin)
-                zMin = magZ;
-            usleep(100000);
-        }
-#endif
-
-        printf("Done calibration sequence.  Writing to disk.\n");
-        FILE *f = fopen("./.calibration", "w");
-        fprintf(f, "AX:%d\n",accelXCal);
-        fprintf(f, "AY:%d\n",accelYCal);
-        fprintf(f, "AZ:%d\n",accelZCal);
-        fprintf(f, "GX:%d\n",gyroXCal);
-        fprintf(f, "GY:%d\n",gyroYCal);
-        fprintf(f, "GZ:%d\n",gyroZCal);
-        fprintf(f, "MXMin:%d\n",xMin);
-        fprintf(f, "MXMax:%d\n",xMax);
-        fprintf(f, "MYMin:%d\n",yMin);
-        fprintf(f, "MYMax:%d\n",yMax);
-        fprintf(f, "MZMin:%d\n",zMin);
-        fprintf(f, "MZMax:%d\n",zMax);
-        fclose(f);
+    pitchOffset = -pitchAngle;
+    rollOffset = -rollAngle;
 }
 
 void CalculateGyroPID(ControlMode *manualControl)
@@ -932,7 +871,7 @@ void ManualControl(ControlMode *manualControl)
         targetHeading = strtof(val, 0);
         autonomous = true;
     }
-    else if (!strcmp(msgType, "CAL"))  // Calibrate sensors (deprecated)
+    else if (!strcmp(msgType, "CAL"))  // Calibrate sensors (set pichOffset rollOffset to level
     {
         CalibrateSensors();
     }
@@ -2035,7 +1974,6 @@ void giveGreeting()
     strcpy(greeting, "Good morning, humans.");
     speak(greeting);
 
-    usleep(1000000);
     // Get the weather
     FILE *fp = popen("./weather", "r");
     if (fp != NULL)
@@ -2051,7 +1989,8 @@ void giveGreeting()
     }
 
     // Get the score of yestderday's Phillies game
-    usleep(1000000);
+#ifdef JUNK
+    usleep(2000000);
     fp = popen("./score Phillies", "r");
     if (fp != NULL)
     {
@@ -2064,6 +2003,10 @@ void giveGreeting()
 	    speak(score);
 	}
     }
+#endif
+//    usleep(1000000);
+//    speak("Alexa, whats the weather for today.");
+
 
     panServo = savedPan;
     tiltServo = savedTilt;
@@ -2307,7 +2250,7 @@ int main(int argc, char **argv)
 	    {
 		case STATUS_NO_FIX: strcpy(gps_status, "NO FIX"); break;
 		case STATUS_FIX: strcpy(gps_status, "FIX - NO DGPS"); break;
-//		case STATUS_DGPS_FIX: strcpy(gps_status, "FIX - DGPS"); break;
+		case STATUS_DGPS_FIX: strcpy(gps_status, "FIX - DGPS"); break;
 		default: strcpy(gps_status, "Unknown"); break;
  	    }
 	    printf("GPS STATUS: %s\n", gps_status);
@@ -2334,6 +2277,7 @@ int main(int argc, char **argv)
             printf("LED: %s\n", led ? "ON" : "OFF");
 	    printf("Wall PID output: %f\n", wallPIDOutput);
 	    printf("Main Bus Voltage: %2.2fV\n", voltage1);
+	    printf("Secondary Bus Voltage: %2.2fV\n", voltage2);
 
 	    // Get CPU temperature
 	    FILE *temperatureFile = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
@@ -2395,6 +2339,7 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "GyroZ: %c%2.2f\n", zGyroFilter.GetValue() >= 0 ? ' ' : ' ', zGyroFilter.GetValue());
 	    fprintf(outFile, "Light Intensity: %2.2f\n", lightIntensity);
 	    fprintf(outFile, "Main Bus Voltage: %2.2fV\n", voltage1);
+	    fprintf(outFile, "Secondary Bus Voltage: %2.2fV\n", voltage2);
 	    fprintf(outFile, "CPU Temperature: %d\n", cpuTemperature);
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 	    fprintf(outFile, "Timestamp: %lld\n", current_timestamp());
