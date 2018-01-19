@@ -1,6 +1,6 @@
 <?php
 $text = $_POST['text'];
 $speed = $_POST['speed'];
-$cmd = "/usr/bin/espeak --stdout -s $speed \"$text\" | /usr/bin/aplay";
+$cmd = "/usr/bin/espeak -s $speed \"$text\"";
 exec($cmd, $outputArray);
 ?>

@@ -7,7 +7,7 @@
 <head>
     <link rel="stylesheet" type="text/css" href="css/flightindicators.css" />
     <script src="script-robot.js"></script>
-
+    <script src="gauge.min.js"></script>
   <style>
      #dot{
             position: absolute;
@@ -349,9 +349,9 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
    <div style="position:absolute; top:7px; left:83px; font-size:8pt;">F</div>
    <div style="position:absolute; top:86px; left:10px; font-size:8pt;">L</div>
    <div style="position:absolute; top:86px; left:155px; font-size:8pt;">R</div>
-   <div id="distance1Indicator" style="font-size:8pt; position:absolute; top:7px; left:100px; color:red; width:30px; text-align:right"></div>
-   <div id="distance2Indicator" style="font-size:8pt; position:absolute; top:86px; left:25px; color:red; width:30px; text-align:right"></div>
-   <div id="distance3Indicator" style="font-size:8pt; position:absolute; top:86px; left:115px; color:red; width:30px; text-align:right"></div>
+   <div id="distance1Indicator" style="font-size:8pt; position:absolute; top:86px; left:25px; color:red; width:30px; text-align:right"></div>
+   <div id="distance3Indicator" style="font-size:8pt; position:absolute; top:7px; left:100px; color:red; width:30px; text-align:right"></div>
+   <div id="distance2Indicator" style="font-size:8pt; position:absolute; top:86px; left:115px; color:red; width:30px; text-align:right"></div>
 </div>
 
 
@@ -360,7 +360,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <img onmousedown='motorMouseDown(event);' onmousemove='motorMouseMove(event);' onmouseup='motorMouseUp();' draggable="false" ondragstart="return false;" ontouchstart='motorTouchStart(event);' ontouchmove='motorTouchMove(event);' ontouchend='motorTouchEnd(event);' ontouchcancel='motorTouchEnd(event);'  src="crosshairs-640x480.png" style="opacity:0.5; position:absolute; top:35px; left:15px; height:375px; width:500px"/>
 
 <!-- Telemetry data -->
-<div id="data" style="align:center; width:875px; height:800px; position:absolute; top:980px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div id="data" style="align:center; width:875px; height:830px; position:absolute; top:980px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <!--
 <div style="position:absolute; top:850px; left:10px; " id="data"></div>
 -->
@@ -396,12 +396,12 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 
 
 <!-- Main Control Panel -->
-<div style="align:center; width:1290px; height:480px; position:absolute; top:480px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="align:center; width:1290px; height:480px; position:absolute; top:478px; left:10px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 
 
 
 <!-- Speak input and control button box -->
-<div style="width:535px; height:340px; position:absolute; top:50px; left:600px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
+<div style="width:535px; height:340px; position:absolute; top:50px; left:550px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
  <div style="position:absolute; top:10px; left:10px;">
    <input style="width:400;" type="text" size="60" id="speakText">
  </div>
@@ -464,9 +464,9 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <!-- Gyro meters -->
 <div style="width:70px; height:120px; position:absolute; top:10px; left:15px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px">
 <div style="width:70px; text-align:center;">Gyros</div>
-<span style="position:absolute; left:-25px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroXMeter" value="0" min="0" max="20" low="5" high="10" optimum="0"></span>
-<span style="position:absolute; left:-5px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroYMeter" value="0" min="0" max="20" low="5" high="10" optimum="0"></span>
-<span style="position:absolute; left:15px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroZMeter" value="0" min="0" max="20" low="5" high="10" optimum="0"></span>
+<span style="position:absolute; left:-25px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroXMeter" value="0" min="0" max="50" low="15" high="30" optimum="0"></span>
+<span style="position:absolute; left:-5px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroYMeter" value="0" min="0" max="50" low="15" high="30" optimum="0"></span>
+<span style="position:absolute; left:15px; top:55px;"><meter style="width:80px; transform:rotate(-90deg); -webkit-transform: rotate(-90deg); -moz-transform: rotate(-90deg);" id="gyroZMeter" value="0" min="0" max="50" low="15" high="30" optimum="0"></span>
 <span style="position:absolute; left:12px; top:100px">x</span>
 <span style="position:absolute; left:32px; top:100px">y</span>
 <span style="position:absolute; left:52px; top:100px">z</span>
@@ -497,19 +497,69 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 </div>
 
 <!-- Battery and attitude indicators -->
-<div style="position:absolute; top:150px; left:100px;">
+<div style="position:absolute; top:150px; left:22px;">
 <span id="attitude"></span>
-<span id="battery"></span>
+<span style="position:absolute; top:0px; left:310px" id="battery"></span>
+<input id="calibrateButton" type="button" style="position:absolute; top:10px; left:10px; width:20px; height:20px;border-radius:10px" onClick="calibrateButtonClicked()"/>
 </div>
 
-<!-- Battery and Light meters -->
-<div style="position:absolute; top:30px; left:135px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px; font-size:9pt">
+<!-- Battery, Light, Voltage, and CPU meters -->
+<div style="position:absolute; top:12px; left:135px; border-style:solid; border-width:1px; border-color:#c0c0c0; border-radius:5px; font-size:9pt">
 <table>
 <tr><td align="right">Main Bus Voltage:</td><td><meter id="voltageMeter1" value="0" min="0" max="16" high="11.8" low="11" optimum="14"></meter></td><td align="right"><span id="voltageText1">0.00V</span></td></tr>
 <tr><td align="right">Secondary Bus Voltage:</td><td><meter id="voltageMeter2" value="5" min="0" max="16.0" high="7.0" low="3.0" optimum="5.0"></meter></td><td align="right"><span id="voltageText2">5.0V</span></td></tr>
 <tr><td align="right">CPU Core Temperature:</td><td><meter id="cpuTemperatureMeter" value="0" min="0" max="100.0" high="60" optimum="50"></meter></td><td align="right"><span id="cpuTemperatureText">0.0</span></td></tr>
+<tr><td align="right">CPU Load Percentage:</td><td><meter id="cpuPercentageMeter" value="0" min="0" max="100.0" high="60" optimum="50"></meter></td><td align="right"><span id="cpuPercentageText">0.0%</span></td></tr>
 <tr><td align="right">Light Intensity:</td><td><meter id="lightIntensityMeter" value="0" min="0" max="100.0"></meter></td><td align="right"><span id="lightIntensityText">0.0</span></td></tr>
+<tr><td align="right">Wifi Signal Strength:</td><td><meter id="wifiSignalMeter" value="0" min="-90" max="0" low="-60" optimum="-40"></meter></td><td align="right"><span id="wifiSignalText">0.0</span></td></tr>
 </table>
+
+<!-- Compass Gauge -->
+<div style="position:absolute; top:148px; left:53px; width:126px; height:126px">
+<canvas id="compassGauge" data-type="radial-gauge"
+    data-min-value="0"
+    data-max-value="360"
+    data-major-ticks="N,NE,E,SE,S,SW,W,NW,N"
+    data-minor-ticks="22"
+    data-ticks-angle="360"
+    data-start-angle="180"
+    data-stroke-ticks="false"
+    data-highlights="false"
+    data-color-plate="#232323"
+    data-color-major-ticks="#f5f5f5"
+    data-color-minor-ticks="#ddd"
+    data-color-numbers="#ccc"
+    data-color-needle="rgba(240, 128, 128, 1)"
+    data-color-needle-end="rgba(255, 160, 122, .9)"
+    data-value-box="true"
+    data-value-text-shadow="false"
+    data-color-circle-inner="#fff"
+    data-color-needle-circle-outer="#ccc"
+    data-needle-circle-size="7"
+    data-needle-circle-outer="false"
+    data-animation-rule="linear"
+    data-needle-type="line"
+    data-needle-start="0"
+    data-needle-end="99"
+    data-needle-width="3"
+    data-borders="true"
+    data-border-inner-width="0"
+    data-border-middle-width="0"
+    data-border-outer-width="5"
+    data-color-border-outer="#000"
+    data-color-border-outer-end="#000"
+    data-color-needle-shadow-down="#222"
+    data-border-shadow-width="0"
+    data-animation-target="plate"
+    data-units="Deg"
+    data-title="HEADING"
+    data-font-title-size="19"
+    data-color-title="#f5f5f5"
+    data-animation-duration="100"
+></canvas>
+</div>
+
+
 </div>
 
 <!-- Battery Warning Indicator -->
@@ -520,6 +570,7 @@ Grayscale: <input id="grayscaleCheckbox" style="vertical-align:bottom" type="che
 <!-- Comms Indicator -->
 <div style="position:absolute; top:438px; left:180px;">Comm Status:</div>
 <div id="commsIndicator" style="position:absolute; top:443px; left:280px; border-style:solid; border-width:1px; border-color:gray; border-radius:5px; width:9px; height:9px; background-color:red"></div>
+<div id="commsDebug" style="position:absolute; top:443px; left:300px;"></div>
 </div>
 
 <!-- Turn indicator -->
@@ -564,6 +615,11 @@ function scanButtonClicked()
     }
 
     scanMode = !scanMode;
+}
+
+function calibrateButtonClicked()
+{
+    sendCommand("CAL:0");
 }
 
 function catButtonClicked()
@@ -732,7 +788,10 @@ function nextWaypoint()
 function initialize()
 {
     init();
-    cesiumFrame.contentWindow.location.reload();
+    if (cesiumFrame != null && cesiumFrame.contentWindow != null)
+    {
+	cesiumFrame.contentWindow.location.reload();
+    }
     sendCommand("RW:0");
     document.getElementById("speedRange").value = 110;
     document.getElementById("volRange").value = 85;
@@ -747,7 +806,64 @@ function initialize()
     document.getElementById("grayscaleCheckbox").checked = false;
 
     setTimeout('initCamera();', 1000);
+
+    setInterval('updateCompassGauge();', 100);
 }
+
+compassGg = new RadialGauge({
+    renderTo: 'compassGauge',
+    minValue: 0,
+    maxValue: 360,
+    majorTicks: [
+        "N",
+        "NE",
+        "E",
+        "SE",
+        "S",
+        "SW",
+        "W",
+        "NW",
+        "N"
+    ],
+    minorTicks: 22,
+    ticksAngle: 360,
+    startAngle: 180,
+    strokeTicks: false,
+    highlights: true,
+    colorPlate: "#232323",
+    colorMajorTicks: "#f5f5f5",
+    colorMinorTicks: "#ddd",
+    colorNumbers: "#ccc",
+    colorNeedle: "rgba(240, 128, 128, 1)",
+    colorNeedleEnd: "rgba(255, 160, 122, .9)",
+    valueBox: true,
+    valueTextShadow: false,
+    colorCircleInner: "#fff",
+    colorNeedleCircleOuter: "#000",
+    colorNeedleCircleInner: "#000",
+    needleCircleSize: 7,
+    needleCircleOuter: false,
+    animationRule: "linear",
+    needleType: "line",
+    needleStart: 0,
+    needleEnd: 99,
+    needleWidth: 3,
+    borders: true,
+    borderInnerWidth: 0,
+    borderMiddleWidth: 0,
+    borderOuterWidth: 6,
+    colorBorderOuter: "#000",
+    colorBorderOuterEnd: "#000",
+    colorNeedleShadowDown: "#222",
+    borderShadowWidth: 0,
+    animationTarget: "plate",
+    units: "",
+    title: "HEADING",
+    fontTitleSize: 19,
+    colorTitle: "#f5f5f5",
+    animationDuration: 100
+}).draw();
+
 
 function initCamera()
 {
@@ -859,6 +975,7 @@ function showHideCompass()
 
 var timestampDupCount = 0;
 var oldTimestamp;
+var ledBright = 0;
 
 function formatTelemetryData(data)
 {
@@ -921,6 +1038,9 @@ function formatTelemetryData(data)
     document.getElementById('voltageMeter1').value = telemetry["Main Bus Voltage"].slice(0,-1);
     document.getElementById('voltageText1').innerText = telemetry["Main Bus Voltage"];
 
+    document.getElementById('voltageMeter2').value = telemetry["Secondary Bus Voltage"].slice(0,-1);
+    document.getElementById('voltageText2').innerText = telemetry["Secondary Bus Voltage"];
+
     // Update the light intensity meter
     document.getElementById('lightIntensityMeter').value = telemetry["Light Intensity"];
     document.getElementById('lightIntensityText').innerText = telemetry["Light Intensity"];
@@ -935,6 +1055,15 @@ function formatTelemetryData(data)
     // Update the CPU temperature meter
     document.getElementById('cpuTemperatureMeter').value = telemetry["CPU Temperature"];
     document.getElementById('cpuTemperatureText').innerText = telemetry["CPU Temperature"] + "\u00b0C";
+
+    // Update the CPU load meter
+    document.getElementById('cpuPercentageMeter').value = telemetry["CPU Percentage"];
+    document.getElementById('cpuPercentageText').innerText = telemetry["CPU Percentage"] + "%";
+
+    // Update the Wifi Signal Strength meter
+    signalStrength = telemetry["Wifi Signal Strength"];
+    document.getElementById('wifiSignalMeter').value = signalStrength * -1;
+    document.getElementById('wifiSignalText').innerText = signalStrength * -1 + "dBm";
 
     // Update the gyro meters
     document.getElementById('gyroXMeter').value = Math.abs(telemetry["GyroX"]);
@@ -1036,9 +1165,9 @@ function formatTelemetryData(data)
     if (distance2 > 100) distance2 = 100;
     if (distance3 > 100) distance3 = 100;
 
-    document.getElementById('distanceMeterCenter').value = distance1 / 2;
-    document.getElementById('distanceMeterLeft').value = distance2 / 2;
-    document.getElementById('distanceMeterRight').value = distance3 / 2;
+    document.getElementById('distanceMeterLeft').value = distance1 / 2;
+    document.getElementById('distanceMeterRight').value = distance2 / 2;
+    document.getElementById('distanceMeterCenter').value = distance3 / 2;
 
     // Update distance indicators
     if (distance1 == 100)
@@ -1075,9 +1204,21 @@ function formatTelemetryData(data)
     else
     {
 	if (telemetry["LED"] == "ON")
-	    document.getElementById('commsIndicator').style.backgroundColor = "green";
+	{
+	    ledBright += 50;
+	    if (ledBright > 255)
+		ledBright = 255;
+//	    document.getElementById('commsIndicator').style.backgroundColor = "green";
+	    document.getElementById('commsIndicator').style.backgroundColor = "rgba(0, 140, 0, " + ledBright / 255 + ")";
+	}
 	else
-	    document.getElementById('commsIndicator').style.backgroundColor = "white";
+	{
+	    ledBright -= 50;
+	    if (ledBright < 0)
+		ledBright = 0;
+//	    document.getElementById('commsIndicator').style.backgroundColor = "white";
+	    document.getElementById('commsIndicator').style.backgroundColor = "rgba(0, 140, 0, " + ledBright / 255 + ")";
+	}
     }
     oldTimestamp = timestamp;
 
@@ -1130,6 +1271,10 @@ function formatTelemetryData(data)
     }
 }
 
+function updateCompassGauge()
+{
+    compassGg.value = telemetry["Heading"];
+}
 
 
 /*

@@ -1,0 +1,14 @@
+*.keep
+*.save
+*.sav
+*.old
+*.o
+*.dat
+*.log
+
+arduino/.dep/
+arduino/.lib/
+arduino/Makefile.raspi
+arduino/arduino.mk
+arduino/robot.hex
+

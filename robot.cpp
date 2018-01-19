@@ -34,6 +34,7 @@ const int CAL_SAMPLES = 10;
 float rollOffset = 0.0; //-0.4;
 float pitchOffset = 0.0; // 3.3;
 
+int wifiSignalStrength = 0;
 
 // Mag calibration constants
 // xmin: -216      xmax: 620       ymin: -476      ymax: 320      zmin: -710       zmax: -436
@@ -107,6 +108,8 @@ unsigned long voltage1_t;
 float voltage2;
 unsigned long voltage2_t;
 
+double cpuPercentage = 0.0;
+
 // Say "ouch" when bumped
 bool ouchEnabled = true;
 
@@ -161,6 +164,9 @@ Kalman voltageFilter(0.125, 4, 1, 0);
 Kalman voltage2Filter(0.125, 4, 1, 0);
 
 Kalman distanceFilter1(1.125, 4, 1, 0);
+
+Kalman cpuLoadFilter(0.125, 4, 1, 0);
+
 
 //int rotationDegrees = 0;
 
@@ -1989,8 +1995,7 @@ void giveGreeting()
     }
 
     // Get the score of yestderday's Phillies game
-#ifdef JUNK
-    usleep(2000000);
+    usleep(1000000);
     fp = popen("./score Phillies", "r");
     if (fp != NULL)
     {
@@ -2003,7 +2008,6 @@ void giveGreeting()
 	    speak(score);
 	}
     }
-#endif
 //    usleep(1000000);
 //    speak("Alexa, whats the weather for today.");
 
@@ -2092,6 +2096,34 @@ static void *GreetingThread(void *)
     return NULL;
 }
 
+void GetWifiSignalStrength()
+{
+    FILE *fp = popen("/sbin/iwconfig wlan0", "r");
+    if (fp != NULL)
+    {
+	char output[1024] = {0};
+	int charCount = 0;
+	do
+	{
+	    charCount = fread(output, 1, 1024, fp);
+	    if (charCount == 0)
+		break;
+	    char *pos = strstr(output, "Signal level=");
+	    if (pos != NULL)
+	    {
+		pos += 13;
+		char *endPos = strchr(pos, ' ');
+		char valStr[32] = {0};
+		strncpy(valStr, pos, endPos - pos);
+		wifiSignalStrength = atoi(valStr);
+	    }
+	}
+	while (charCount > 0);
+	pclose(fp);
+    }
+}
+
+
 
 long long current_timestamp()
 {
@@ -2100,6 +2132,57 @@ long long current_timestamp()
     long long milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // caculate milliseconds
     return milliseconds;
 }
+
+
+static void *getCPUPercentageThread(void *)
+{
+    while (1)
+    {
+        char buffer[256];
+        long values[2][16] = {0,0};
+        for (int n = 0;n < 2; n++)
+        {
+            FILE *fp = fopen("/proc/stat", "r");
+            fgets(buffer, 256, fp);
+	    fclose(fp);
+
+            char *t = strtok(buffer, " ");
+            int idx = 0;
+            while (t)
+            {
+                t = strtok(0, " ");
+                if (t)
+                {
+                    values[n][idx++] = atol(t);
+                }
+            }
+            usleep(100000);
+        }
+        long total1 = 0;
+	long work1 = 0;
+        long total2 = 0;
+	long work2 = 0;
+	for (int idx = 0; idx < 10; idx++)
+	{
+	    total1 += values[0][idx];
+	    total2 += values[1][idx];
+	}
+
+	for (int idx = 0; idx <= 2; idx++)
+	{
+	    work1 += values[0][idx];
+	    work2 += values[1][idx];
+	}
+	long workForPeriod = work2 - work1;
+	long totalForPeriod = total2 - total1;
+	double cpuPercentageNow = (double)workForPeriod / (double)totalForPeriod * 100.0;
+	cpuLoadFilter.update(cpuPercentageNow);
+	cpuPercentage = cpuLoadFilter.GetValue();
+	usleep(100000);
+    }
+}
+
+
 
 bool voltageHysteresis = FALSE;
 
@@ -2178,6 +2261,11 @@ int main(int argc, char **argv)
     printf("Starting GPS thread\n");
     pthread_t gpsThreadId;
     pthread_create(&gpsThreadId, NULL, GpsThread, NULL);
+
+    printf("Starting CPU Percentage thread\n");
+    pthread_t cpuThreadId;
+    pthread_create(&cpuThreadId, NULL, getCPUPercentageThread, NULL);
+
 
 
     pthread_t serialThreadId;
@@ -2278,6 +2366,7 @@ int main(int argc, char **argv)
 	    printf("Wall PID output: %f\n", wallPIDOutput);
 	    printf("Main Bus Voltage: %2.2fV\n", voltage1);
 	    printf("Secondary Bus Voltage: %2.2fV\n", voltage2);
+	    printf("CPU Percentage: %2.2f%%\n", cpuPercentage);
 
 	    // Get CPU temperature
 	    FILE *temperatureFile = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
@@ -2286,6 +2375,10 @@ int main(int argc, char **argv)
 	    fclose (temperatureFile);
 	    int cpuTemperature = atoi(temperatureStr) / 1000;
 	    printf("CPU Temperature: %dC\n", cpuTemperature);
+
+	    // Get Wifi signal strength
+	    GetWifiSignalStrength();
+	    printf("Wifi Signal Strength: %ddBm\n", wifiSignalStrength);
 
 //	    printf("Greeting Given: %s\n", gaveGreetingToday ? "true" : "false");
 //	    printf("Dark: %s\n", inTheDark?"true":"false");
@@ -2341,6 +2434,8 @@ int main(int argc, char **argv)
 	    fprintf(outFile, "Main Bus Voltage: %2.2fV\n", voltage1);
 	    fprintf(outFile, "Secondary Bus Voltage: %2.2fV\n", voltage2);
 	    fprintf(outFile, "CPU Temperature: %d\n", cpuTemperature);
+	    fprintf(outFile, "CPU Percentage:%2.2f\n", cpuPercentage);
+	    fprintf(outFile, "Wifi Signal Strength: %d\n", abs(wifiSignalStrength));
             fprintf(outFile, "LED: %s\n", led ? "ON" : "OFF");
 	    fprintf(outFile, "Timestamp: %lld\n", current_timestamp());
 
